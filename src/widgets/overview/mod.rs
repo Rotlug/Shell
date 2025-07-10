@@ -1,5 +1,5 @@
 use gtk4::prelude::*;
-use gtk4_layer_shell::{Edge, Layer, LayerShell};
+use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
 
 use crate::{ipc, singletons::hyprland};
 
@@ -10,6 +10,7 @@ pub fn new(application: &libadwaita::Application) {
             set_application: Some(application),
             init_layer_shell: (),
             set_monitor: hyprland::get_active_monitor().as_ref(),
+            set_keyboard_mode: KeyboardMode::OnDemand,
             set_layer: Layer::Top,
             set_anchor: (Edge::Left, true),
             set_anchor: (Edge::Right, true),
