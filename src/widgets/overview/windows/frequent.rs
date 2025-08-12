@@ -10,22 +10,7 @@ pub struct OverviewFrequentWindow {
 
 impl OverviewFrequentWindow {
     pub fn new() -> Self {
-        let widget = gtk4::Box::new(gtk4::Orientation::Vertical, 12);
-        widget.set_css_classes(&["overview-window"]);
-        widget.set_hexpand(true);
-        widget.set_vexpand(true);
-        widget.set_halign(gtk4::Align::Center);
-        widget.set_valign(gtk4::Align::Center);
-
-        let header = gtk4::Label::new(Some("Frequently Launched"));
-        header.set_css_classes(&["overview-window-header"]);
-        widget.append(&header);
-
-        let children = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
-        children.set_css_classes(&["overview-window-children"]);
-        children.set_hexpand(true);
-        children.set_vexpand(true);
-        widget.append(&children);
+        let (widget, children) = super::build_window("Frequently Launched");
 
         Self {
             widget,
