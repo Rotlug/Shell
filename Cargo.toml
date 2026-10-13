@@ -22,6 +22,7 @@ gsk = { version = "0.10.3", package = "gsk4" }
 gtk = { version = "0.10.3", features = ["v4_8"], package = "gtk4" }
 gtk4-layer-shell = "0.7.1"
 hyprland = "0.4.0-beta.3"
+niri-ipc = "26.4.0"
 image = "0.25.10"
 libadwaita = { version = "0.8.1", features = ["v1_4", "v1_7"] }
 libc = "0.2.189"

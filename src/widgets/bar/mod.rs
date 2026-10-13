@@ -17,7 +17,7 @@ use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell as _};
 
 use crate::APP_LOCAL;
 use crate::ipc;
-use crate::services::hyprland;
+use crate::services::compositor;
 use crate::utils::gesture;
 use self::base::{BarModule, hide_all_expanded_modules};
 
@@ -183,7 +183,7 @@ impl BarWindow {
 }
 
 pub fn toggle_module_by_name(name: &str) {
-    let Some(monitor) = hyprland::get_active_monitor() else {
+    let Some(monitor) = compositor::get_active_monitor() else {
         return;
     };
 

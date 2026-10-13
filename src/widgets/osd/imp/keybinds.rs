@@ -1,7 +1,7 @@
 use std::{rc::Rc, cell::RefCell};
 use futures_signals::signal::SignalExt as _;
 
-use crate::services::hyprland;
+use crate::services::compositor;
 use super::{OsdRevealer, Osd};
 
 #[derive(Debug, Clone)]
@@ -26,7 +26,7 @@ impl Osd for KeybindsOsd {
         glib::spawn_future_local({
             let revealers = self.revealers.clone();
 
-            signal_cloned!(hyprland::HYPRLAND.submap, (submap) {
+            signal_cloned!(compositor::COMPOSITOR.submap, (submap) {
                 let value = submap.map_or("on", |submap| if submap == "grab" {
                     "off"
                 } else {

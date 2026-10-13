@@ -3,7 +3,7 @@ use cairo::{RectangleInt, Region};
 use gtk4_layer_shell::{Edge, Layer, KeyboardMode, LayerShell as _};
 use libadwaita::Clamp;
 
-use crate::services::hyprland;
+use crate::services::compositor;
 use crate::utils::gesture;
 use crate::widgets::common::revealer::{AdwRevealer, AdwRevealerDirection, GEasing};
 use super::{GmsWindow, hide_all_popups};
@@ -36,7 +36,7 @@ pub struct PopupOptions {
 impl GmsWindow for PopupWindow {
     fn show(&self) {
         hide_all_popups();
-        let monitor = hyprland::get_active_monitor();
+        let monitor = compositor::get_active_monitor();
         self.window.set_monitor(monitor.as_ref());
         self.set_clickthrough(false);
         self.window.add_css_class("visible");
@@ -91,7 +91,7 @@ impl PopupWindow {
             .chain(classes.iter().copied())
             .collect::<Vec<&str>>();
 
-        let monitor = hyprland::get_active_monitor();
+        let monitor = compositor::get_active_monitor();
         let window = gtk::ApplicationWindow::new(application);
         window.set_css_classes(&window_classes);
         window.init_layer_shell();

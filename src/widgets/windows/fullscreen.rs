@@ -2,7 +2,7 @@ use gtk::prelude::*;
 use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell as _};
 
 use crate::utils::gesture;
-use crate::services::hyprland;
+use crate::services::compositor;
 use super::{GmsWindow, hide_all_fullscreen_windows};
 
 /// A window that takes up the whole screen. It closes itself when it loses focus.
@@ -14,7 +14,7 @@ pub struct FullscreenWindow {
 impl GmsWindow for FullscreenWindow {
     fn show(&self) {
         hide_all_fullscreen_windows();
-        let monitor = hyprland::get_active_monitor();
+        let monitor = compositor::get_active_monitor();
         self.window.set_monitor(monitor.as_ref());
         self.window.show();
     }
@@ -52,7 +52,7 @@ impl FullscreenWindow {
         classes: &[&str],
         child: &impl IsA<gtk::Widget>
     ) -> Self {
-        let monitor = hyprland::get_active_monitor();
+        let monitor = compositor::get_active_monitor();
         let window = gtk::ApplicationWindow::new(application);
         
         window.set_css_classes(classes);

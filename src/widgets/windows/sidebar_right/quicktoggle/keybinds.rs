@@ -2,7 +2,7 @@ use futures_signals::signal::SignalExt as _;
 use ::hyprland::dispatch;
 use ::hyprland::instance::Instance;
 
-use crate::services::hyprland;
+use crate::services::compositor;
 use super::{QuickToggle, QuickToggleMuiIcon};
 
 pub fn new() -> gtk::Button {
@@ -21,7 +21,7 @@ pub fn new() -> gtk::Button {
 
     let button = toggle.button.clone();
 
-    glib::spawn_future_local(signal_cloned!(hyprland::HYPRLAND.submap, (submap) {
+    glib::spawn_future_local(signal_cloned!(compositor::COMPOSITOR.submap, (submap) {
         if let Some(submap) = submap {
             toggle.set_toggled(submap == "grab");
         } else {

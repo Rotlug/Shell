@@ -1,7 +1,7 @@
 use futures_signals::signal::{Mutable, SignalExt as _};
 use gtk::prelude::*;
 
-use crate::services::hyprland;
+use crate::services::compositor;
 use crate::APP_LOCAL;
 use super::super::base::BarModule;
 
@@ -117,8 +117,8 @@ pub fn new() -> BarModule {
         }
     }
 
-    // Subscribe to Hyprland signals to update the client information
-    glib::spawn_future_local(signal_cloned!(hyprland::HYPRLAND.active_client, (client) {
+    // Subscribe to compositor signals to update the client information
+    glib::spawn_future_local(signal_cloned!(compositor::COMPOSITOR.active_client, (client) {
         if let Some(client) = client {
             client_box.set_visible(true);
             workspace_box.set_visible(false);
@@ -137,7 +137,7 @@ pub fn new() -> BarModule {
             class.set_ellipsize(get_ellipsize(client.class, MAX_CLASS_WIDTH));
             title.set_ellipsize(get_ellipsize(client.title, MAX_TITLE_WIDTH));
         } else {
-            let active_workspace = hyprland::HYPRLAND.active_workspace.get_cloned();
+            let active_workspace = compositor::COMPOSITOR.active_workspace.get_cloned();
 
             client_box.set_visible(false);
             workspace_box.set_visible(true);

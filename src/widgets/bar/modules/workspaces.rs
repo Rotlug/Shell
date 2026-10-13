@@ -1,11 +1,8 @@
 use std::sync::{Mutex, LazyLock};
 use futures_signals::signal::SignalExt as _;
 use gtk::prelude::*;
-use ::hyprland::dispatch;
-use ::hyprland::dispatch::WorkspaceIdentifierWithSpecial;
-
 use crate::scss;
-use crate::services::hyprland;
+use crate::services::compositor;
 use crate::utils::gesture;
 use super::super::base::BarModule;
 
@@ -24,8 +21,8 @@ struct WorkspaceMask {
 
 impl WorkspaceMask {
     pub fn update(&mut self) {
-        let workspaces = hyprland::HYPRLAND.workspaces.get_cloned();
-        let active_workspace = hyprland::HYPRLAND.active_workspace.get_cloned();
+        let workspaces = compositor::COMPOSITOR.workspaces.get_cloned();
+        let active_workspace = compositor::COMPOSITOR.active_workspace.get_cloned();
         
         self.mask = if let (Some(workspaces), Some(active_workspace)) = (workspaces, active_workspace) {
             let offset = (((active_workspace.id - 1) as f64 / SHOWN_WORKSPACES as f64).floor() * SHOWN_WORKSPACES as f64) as i32;
@@ -53,16 +50,16 @@ pub fn new() -> BarModule {
 
             if ws >= 1
                 && ws <= SHOWN_WORKSPACES as i32
-                && let Some(active_workspace) = hyprland::HYPRLAND.active_workspace.get_cloned()
+                && let Some(active_workspace) = compositor::COMPOSITOR.active_workspace.get_cloned()
             {
                 let clamped = ((active_workspace.id - 1) / 10) * 10 + ws;
-                let _ = dispatch!(Workspace, WorkspaceIdentifierWithSpecial::Id(clamped));
+                compositor::switch_workspace(clamped);
             }
         }),
 
         workspaces_scroll_gesture = gesture::on_vertical_scroll(|dy| {
             let delta = if dy < 0.0 { -1 } else { 1 };
-            let _ = dispatch!(Workspace, WorkspaceIdentifierWithSpecial::RelativeMonitorIncludingEmpty(delta));
+            compositor::switch_workspace_relative(delta);
         }),
 
         workspaces_drawing_area = gtk::DrawingArea {
@@ -139,13 +136,13 @@ pub fn new() -> BarModule {
 
     glib::spawn_future_local({
         let workspaces_drawing_area = workspaces_drawing_area.clone();
-        signal_cloned!(hyprland::HYPRLAND.workspaces, (_) {
+        signal_cloned!(compositor::COMPOSITOR.workspaces, (_) {
             WORKSPACE_MASK.lock().unwrap().update();
             workspaces_drawing_area.queue_draw();
         })
     });
 
-    glib::spawn_future_local(signal_cloned!(hyprland::HYPRLAND.active_workspace, (active) {
+    glib::spawn_future_local(signal_cloned!(compositor::COMPOSITOR.active_workspace, (active) {
         WORKSPACE_MASK.lock().unwrap().update();
             
         if let Some(active) = active {

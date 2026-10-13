@@ -2,6 +2,7 @@ pub mod date_time;
 pub mod mpris;
 pub mod sysstats;
 pub mod hyprland;
+pub mod compositor;
 pub mod tray;
 pub mod wireplumber;
 pub mod notifications;
@@ -13,7 +14,7 @@ pub async fn activate_all() {
     date_time::activate();
     mpris::activate();
     sysstats::activate();
-    hyprland::activate();
+    compositor::activate();
     tray::activate();
     wireplumber::activate();
     notifications::activate();
