@@ -6,7 +6,6 @@ pub mod tray;
 pub mod wireplumber;
 pub mod apps;
 pub mod calculator;
-pub mod g_translate;
 pub mod notifications;
 pub mod networkmanager;
 pub mod clipboard;
@@ -23,7 +22,6 @@ pub async fn activate_all() {
     wireplumber::activate();
     apps::activate().await;
     calculator::activate();
-    g_translate::activate();
     notifications::activate();
     //networkmanager::activate();
     clipboard::activate();
