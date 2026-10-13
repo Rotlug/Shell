@@ -1,6 +1,5 @@
 use gtk::prelude::*;
 
-use crate::ffi::astalwp::ffi;
 use crate::utils::gesture;
 use crate::services::wireplumber;
 use crate::widgets::windows;
@@ -27,7 +26,7 @@ pub fn new() -> BarModule {
             if let Some(default_speaker) = wireplumber::get_default_speaker() {
                 let new_volume = (delta_y as f32).mul_add(-VOLUME_STEP, default_speaker.node.volume).clamp(0.0, 1.5);
 
-                ffi::node_set_volume(default_speaker.node.id, new_volume);
+                wireplumber::set_node_volume(default_speaker.node.id, new_volume);
             }
         }),
 

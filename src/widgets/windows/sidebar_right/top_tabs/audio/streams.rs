@@ -2,8 +2,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use gtk::prelude::*;
 
-use crate::ffi::astalwp::ffi::{self, Node};
-use crate::services::wireplumber;
+use crate::services::wireplumber::{self, Node};
 use crate::utils::gesture;
 use crate::widgets::common::dot_separator;
 
@@ -40,8 +39,8 @@ impl AudioStream {
         mute_button.set_css_classes(&["audio-stream-mute-button"]);
         mute_button.set_halign(gtk::Align::End);
         mute_button.connect_clicked(move |_| {
-            let mute = ffi::node_get_mute(node.id);
-            ffi::node_set_mute(node.id, !mute);
+            let mute = wireplumber::get_node(node.id).map(|n| n.mute).unwrap_or(false);
+            wireplumber::set_node_mute(node.id, !mute);
         });
         
         if node.mute {
@@ -59,7 +58,7 @@ impl AudioStream {
         volume_slider.set_value(node.volume as f64);
         volume_slider.connect_value_changed(move |slider| {
             let value = slider.value();
-            ffi::node_set_volume(node.id, value as f32);
+            wireplumber::set_node_volume(node.id, value as f32);
         });
         
         let volume_slider_drag_gesture = gtk::GestureDrag::new();
@@ -81,7 +80,7 @@ impl AudioStream {
             move |dy| {
                 let current = volume_slider.value();
                 let new = dy.mul_add(-0.05, current).clamp(0.0, 1.0);
-                ffi::node_set_volume(node.id, new as f32);
+                wireplumber::set_node_volume(node.id, new as f32);
             }
         )));
         

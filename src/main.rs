@@ -9,7 +9,6 @@ mod macros;
 
 mod color;
 mod ipc;
-mod ffi;
 mod services;
 mod widgets;
 mod utils;

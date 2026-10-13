@@ -3,8 +3,7 @@ mod streams;
 
 use gtk::prelude::*;
 
-use crate::ffi::astalwp::{WpEvent, ffi::EndpointType};
-use crate::services::wireplumber;
+use crate::services::wireplumber::{self, WpEvent, EndpointType};
 use crate::widgets::common::tabs::{Tabs, TabSize};
 
 pub fn new() -> gtk::Box {

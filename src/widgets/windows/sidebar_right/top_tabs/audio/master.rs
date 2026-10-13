@@ -2,8 +2,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use gtk::prelude::*;
 
-use crate::ffi::astalwp::ffi::{self, Endpoint, EndpointType};
-use crate::services::wireplumber;
+use crate::services::wireplumber::{self, Endpoint, EndpointType};
 use crate::utils::gesture;
 use crate::widgets::common::revealer::{AdwRevealer, AdwRevealerDirection, GEasing};
 
@@ -18,7 +17,7 @@ impl MasterDevice {
         let root = gtk::Button::new();
         root.set_css_classes(&["audio-master-device-root"]);
         root.connect_clicked(move |_| {
-            ffi::endpoint_set_is_default(endpoint.node.id, true);
+            wireplumber::set_default(endpoint.node.id);
         });
         
         let root_box = gtk::Box::new(gtk::Orientation::Horizontal, 0);
@@ -97,7 +96,7 @@ impl MasterControls {
                     EndpointType::Microphone => wireplumber::get_default_microphone(),
                     _ => wireplumber::get_default_speaker(),
                 } {
-                    ffi::node_set_volume(endpoint.node.id, value as f32);
+                    wireplumber::set_node_volume(endpoint.node.id, value as f32);
                 }
             }
         ));
@@ -126,7 +125,7 @@ impl MasterControls {
                     EndpointType::Microphone => wireplumber::get_default_microphone(),
                     _ => wireplumber::get_default_speaker(),
                 } {
-                    ffi::node_set_volume(endpoint.node.id, new as f32);
+                    wireplumber::set_node_volume(endpoint.node.id, new as f32);
                 }
             }
         )));

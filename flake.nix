@@ -14,8 +14,9 @@
       perSystem =
         { pkgs, ... }:
         let
-          # Native deps for the gtk4/libadwaita/relm4 UI plus the astal-wireplumber
-          # FFI bridge (src/ffi/astalwp) used for volume control.
+          # Native deps for the gtk4/libadwaita/relm4 UI. Audio (src/services/
+          # wireplumber.rs) talks to PipeWire directly via the pure-Rust
+          # `pwmixer` crate, so no WirePlumber/astal C headers are needed.
           nativeLibs = with pkgs; [
             glib
             gtk4
@@ -32,11 +33,7 @@
             fontconfig
             freetype
 
-            astal.wireplumber
-            wireplumber
-            pipewire
-            util-linux # libmount/libblkid, needed by astal-wireplumber's FFI headers
-            sysprof
+            pipewire # libpipewire/libspa, for the pwmixer crate
             lm_sensors # `sensors` crate (CPU temps in the sysstats bar module)
           ];
         in
@@ -48,17 +45,18 @@
               cargo
               rustfmt
               clippy
-              clang
             ];
 
-            buildInputs = nativeLibs;
+            buildInputs = nativeLibs ++ [ pkgs.libclang.lib ];
 
-            # cxx-build (build.rs) needs these on the include/lib search path for
-            # the astalwp FFI bridge; pkg-config alone isn't enough since that
-            # C++ file's #includes are resolved by the compiler invocation cxx_build
-            # drives directly, not through `pkg-config --cflags`.
             shellHook = ''
               export PKG_CONFIG_PATH="${pkgs.lib.makeSearchPathOutput "dev" "lib/pkgconfig" nativeLibs}:$PKG_CONFIG_PATH"
+              # libspa-sys uses bindgen, which needs libclang at build time.
+              # bindgen calls libclang directly (not through the nixpkgs cc
+              # wrapper), so it doesn't automatically see glibc's headers -
+              # point it there explicitly or it can't even find <inttypes.h>.
+              export LIBCLANG_PATH="${pkgs.libclang.lib}/lib"
+              export BINDGEN_EXTRA_CLANG_ARGS="-isystem ${pkgs.glibc.dev}/include"
             '';
           };
         };
