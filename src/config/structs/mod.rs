@@ -1,7 +1,5 @@
-mod weather;
 mod screen_recorder;
 
-pub use weather::*;
 pub use screen_recorder::*;
 
 pub fn deserialize_insensitive<'de, T, D>(deserializer: D) -> Result<T, D::Error>

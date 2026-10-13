@@ -35,7 +35,6 @@ rand = "0.9.5"
 regex = "1.13.1"
 relm4 = "0.10.1"
 relm4-macros = "0.10.1"
-reqwest = "0.12.28"
 rusqlite = { version = "0.38.0", features = ["serde_json", "chrono"] }
 schemars = "1.2.2"
 sensors = "0.2.2"

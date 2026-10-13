@@ -9,9 +9,6 @@ use notify::event::{AccessKind, AccessMode, EventKind};
 use serde::{Deserialize, Serialize};
 
 pub use enums::{
-    WeatherTemperatureUnit,
-    WeatherSpeedUnit,
-    WeatherPrecipitationUnit,
     ScreenRecorderVideoContainer,
     ScreenRecorderVideoQuality,
     ScreenRecorderVideoCodec,
@@ -21,11 +18,7 @@ pub use enums::{
     ScreenRecorderColorRange,
 };
 
-use structs::{
-    WeatherConfig,
-    WeatherAlertsConfig,
-    ScreenRecorderConfig,
-};
+use structs::ScreenRecorderConfig;
 
 use crate::utils::filesystem::get_config_directory;
 
@@ -38,27 +31,12 @@ const FILE_NAME: &str = "config.toml";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
-    pub weather: WeatherConfig,
     pub screen_recorder: ScreenRecorderConfig,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Config {
-            weather: WeatherConfig {
-                enabled: true,
-                latitude: 0.0,
-                longitude: 0.0,
-                timezone: "auto".to_owned(),
-                temperature_unit: WeatherTemperatureUnit::Fahrenheit,
-                speed_unit: WeatherSpeedUnit::Mph,
-                precipitation_unit: WeatherPrecipitationUnit::Inch,
-                refresh_interval: 1800,
-                alerts: WeatherAlertsConfig {
-                    enabled: true,
-                    refresh_interval: 30,
-                },
-            },
             screen_recorder: ScreenRecorderConfig {
                 // TODO: get display 0 at runtime
                 capture_target: "portal".to_owned(),
