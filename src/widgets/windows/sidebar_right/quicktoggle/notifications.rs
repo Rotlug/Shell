@@ -1,7 +1,6 @@
 use futures_signals::signal::SignalExt as _;
 
 use crate::APP;
-use crate::sql::wrappers::state::set_do_not_disturb;
 use super::{QuickToggle, QuickToggleMuiIcon};
 
 pub fn new() -> gtk::Button {
@@ -18,12 +17,6 @@ pub fn new() -> gtk::Button {
 
     glib::spawn_future_local(signal!(APP.do_not_disturb, (do_not_disturb) {
         toggle.set_toggled(do_not_disturb);
-        
-        glib::spawn_future_local(async move {
-            if let Err(err) = set_do_not_disturb(do_not_disturb).await {
-                error!(%err, "Failed to set do not disturb");
-            }
-        });
     }));
 
     button

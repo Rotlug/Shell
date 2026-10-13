@@ -12,7 +12,6 @@ mod ipc;
 mod ffi;
 mod services;
 mod widgets;
-mod sql;
 mod utils;
 mod dbus;
 mod scss;
@@ -29,7 +28,6 @@ use tracing::level_filters::LevelFilter;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::fmt::time::ChronoLocal;
 
-use self::sql::actor::SqlActor;
 use self::widgets::{bar, windows::{self, GmsWindow}, notifications::NotificationsWindow};
 use self::utils::{display, process};
 
@@ -65,8 +63,6 @@ pub static APP: LazyLock<GrayMeadowsGlobal> = LazyLock::new(|| GrayMeadowsGlobal
     game_mode: Mutable::new(false),
     do_not_disturb: Mutable::new(false),
 });
-
-pub static SQL_ACTOR: LazyLock<SqlActor> = LazyLock::new(SqlActor::default);
 
 pub static USERNAME: LazyLock<String> = LazyLock::new(|| {
     std::env::var("USER").unwrap_or_else(|_| "unknown".to_owned())
@@ -150,9 +146,6 @@ async fn main() {
                 std::process::exit(1);
             }
         });
-
-        sql::init_database().await;
-        APP.do_not_disturb.set(sql::wrappers::state::get_do_not_disturb().await.unwrap_or(false));
 
         let _ = gtk::init();
 

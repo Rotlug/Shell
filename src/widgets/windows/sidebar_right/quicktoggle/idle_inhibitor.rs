@@ -2,7 +2,6 @@ use futures_signals::signal::SignalExt as _;
 use gtk::prelude::*;
 
 use crate::services::idle_inhibitor::IDLE_INHIBITOR;
-use crate::sql::wrappers::state::set_idle_inhibited;
 use super::{QuickToggle, QuickToggleMuiIcon};
 
 pub fn new() -> gtk::Button {
@@ -21,12 +20,6 @@ pub fn new() -> gtk::Button {
     if let Some(inhibitor) = IDLE_INHIBITOR.get() {
         glib::spawn_future_local(signal!(inhibitor.inhibited, (inhibited) {
             toggle.set_toggled(inhibited);
-
-            glib::spawn_future_local(async move {
-                if let Err(err) = set_idle_inhibited(inhibited).await {
-                    error!(%err, "Failed to set idle inhibited state");
-                }
-            });
         }));
     } else {
         button.set_sensitive(false);

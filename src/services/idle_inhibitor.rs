@@ -7,8 +7,6 @@ use wayland_client::protocol::wl_surface::WlSurface;
 use wayland_protocols::wp::idle_inhibit::zv1::client::zwp_idle_inhibit_manager_v1::ZwpIdleInhibitManagerV1;
 use wayland_protocols::wp::idle_inhibit::zv1::client::zwp_idle_inhibitor_v1::ZwpIdleInhibitorV1;
 
-use crate::sql::wrappers::state::get_idle_inhibited;
-
 pub struct IdleInhibitor {
     conn: Connection,
     qh: QueueHandle<State>,
@@ -120,10 +118,4 @@ pub async fn activate() {
             break;
         }
     });
-
-    match get_idle_inhibited().await {
-        Ok(true) => inhibitor.set_inhibited(true),
-        Ok(false) => {},
-        Err(err) => error!(%err, "Failed to restore idle inhibitor state"),
-    }
 }
