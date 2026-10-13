@@ -9,7 +9,6 @@ pub mod calculator;
 pub mod notifications;
 pub mod networkmanager;
 pub mod clipboard;
-pub mod screen_recorder;
 pub mod idle_inhibitor;
 
 pub async fn activate_all() {
@@ -24,6 +23,5 @@ pub async fn activate_all() {
     notifications::activate();
     //networkmanager::activate();
     clipboard::activate();
-    screen_recorder::activate();
     idle_inhibitor::activate().await;
 }

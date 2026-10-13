@@ -6,7 +6,6 @@ mod modules {
     pub mod mpris;
     pub mod clock;
     pub mod tray;
-    pub mod recorder;
     pub mod volume;
 }
 
@@ -66,7 +65,6 @@ impl BarWindow {
                 set_valign: gtk::Align::Start,
 
                 append: &modules::tray::new(),
-                append: &modules::recorder::new(),
                 append: &modules::volume::new(),
             },
 

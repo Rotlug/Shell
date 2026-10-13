@@ -17,7 +17,6 @@ mod utils;
 mod dbus;
 mod scss;
 mod pixbuf;
-mod config;
 mod session;
 
 use std::cell::RefCell;
@@ -177,7 +176,6 @@ async fn main() {
         services::activate_all().await;
         windows::listen_for_ipc_messages();
         bar::listen_for_ipc_messages();
-        config::watch();
 
         let application = Application::new(
             Some("sn.inpr.gray_meadows_shell"),

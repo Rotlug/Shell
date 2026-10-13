@@ -9,9 +9,8 @@ use super::popup::{PopupWindow, PopupMargin, PopupOptions};
 
 pub fn new(application: &libadwaita::Application) -> PopupWindow {
     let tabs = Tabs::new(TabSize::Large, true, None);
-    tabs.set_current_tab(Some("screen_recorder"));
+    tabs.set_current_tab(Some("color_picker"));
     tabs.add_tab("color picker", "color_picker", Some("palette"), &modules::color_picker::new());
-    tabs.add_tab("screen recorder", "screen_recorder", Some("screen_record"), &modules::screen_recorder::new());
 
     view! {
         left_sidebar_expand_button_label = gtk::Label {
