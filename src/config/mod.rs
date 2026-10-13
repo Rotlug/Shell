@@ -9,13 +9,9 @@ use notify::event::{AccessKind, AccessMode, EventKind};
 use serde::{Deserialize, Serialize};
 
 pub use enums::{
-    OpenAiServiceTier,
-    OpenAiReasoningEffort,
-    GeminiThinkingLevel,
     WeatherTemperatureUnit,
     WeatherSpeedUnit,
     WeatherPrecipitationUnit,
-    AiService,
     ScreenRecorderVideoContainer,
     ScreenRecorderVideoQuality,
     ScreenRecorderVideoCodec,
@@ -26,10 +22,6 @@ pub use enums::{
 };
 
 use structs::{
-    AiConfig,
-    OpenAiConfig,
-    GeminiConfig,
-    AiFeatures,
     WeatherConfig,
     WeatherAlertsConfig,
     ScreenRecorderConfig,
@@ -46,7 +38,6 @@ const FILE_NAME: &str = "config.toml";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
-    pub ai: AiConfig,
     pub weather: WeatherConfig,
     pub screen_recorder: ScreenRecorderConfig,
 }
@@ -54,34 +45,6 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Config {
-            ai: AiConfig {
-                enabled: true,
-                service: AiService::OpenAi,
-                prompt: "You are a helpful AI assistant running on a sidebar in a Linux desktop environment.".to_owned(),
-                user_message_timestamps: true,
-                assistant_name: None,
-                assistant_icon_path: None,
-                openai: OpenAiConfig {
-                    api_base: String::new(),
-                    api_key: "your-api-key-here".to_owned(),
-                    model: "gpt-4.1".to_owned(),
-                    max_output_tokens: 2048,
-                    service_tier: OpenAiServiceTier::Default,
-                    reasoning_effort: OpenAiReasoningEffort::None,
-                },
-                gemini: GeminiConfig {
-                    api_key: "your-api-key-here".to_owned(),
-                    model: "gemini-2.0-flash".to_owned(),
-                    thinking_budget: -1,
-                    thinking_level: GeminiThinkingLevel::Budget,
-                },
-                features: AiFeatures {
-                    power_control: true,
-                    mpris_control: true,
-                    weather_info: true,
-                    web_search: true,
-                },
-            },
             weather: WeatherConfig {
                 enabled: true,
                 latitude: 0.0,

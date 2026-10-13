@@ -12,7 +12,6 @@ pub fn new(application: &libadwaita::Application) -> PopupWindow {
     tabs.set_current_tab(Some("screen_recorder"));
     tabs.add_tab("translate", "translate", Some("g_translate"), &modules::translate::new());
     tabs.add_tab("color picker", "color_picker", Some("palette"), &modules::color_picker::new());
-    tabs.add_tab("ai", "ai", Some("chat"), &modules::ai::new());
     tabs.add_tab("screen recorder", "screen_recorder", Some("screen_record"), &modules::screen_recorder::new());
 
     view! {

@@ -7,8 +7,6 @@ edition = "2024"
 anyhow = "1.0.104"
 async-broadcast = "0.7.2"
 async-channel = "2.5.0"
-async-openai = { version = "0.42.0", features = ["full"] }
-base64 = "0.22.1"
 cairo-rs = "0.21.5"
 chrono = "0.4.45"
 cxx = "1.0.199"
@@ -19,14 +17,12 @@ freedesktop-desktop-entry = "0.8.1"
 futures = "0.3.34"
 futures-signals = "0.3.34"
 gdk = { version = "0.10.3", package = "gdk4" }
-gemini-rust = "2.1.0"
 gio = "0.21.5"
 glib = "0.21.5"
 graphene-rs = "0.21.5"
 gsk = { version = "0.10.3", package = "gsk4" }
 gtk = { version = "0.10.3", features = ["v4_8"], package = "gtk4" }
 gtk4-layer-shell = "0.7.1"
-gtk4cmark = "0.0.4"
 hyprland = "0.4.0-beta.3"
 image = "0.25.10"
 libadwaita = { version = "0.8.1", features = ["v1_4", "v1_7"] }
