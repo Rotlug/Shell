@@ -4,8 +4,6 @@ pub mod sysstats;
 pub mod hyprland;
 pub mod tray;
 pub mod wireplumber;
-pub mod apps;
-pub mod calculator;
 pub mod notifications;
 pub mod networkmanager;
 pub mod clipboard;
@@ -18,8 +16,6 @@ pub async fn activate_all() {
     hyprland::activate();
     tray::activate();
     wireplumber::activate();
-    apps::activate().await;
-    calculator::activate();
     notifications::activate();
     //networkmanager::activate();
     clipboard::activate();

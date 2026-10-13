@@ -1,6 +1,5 @@
 pub mod popup;
 pub mod fullscreen;
-pub mod overview;
 pub mod session;
 pub mod sidebar_left;
 pub mod sidebar_right;
@@ -83,10 +82,6 @@ pub fn listen_for_ipc_messages() {
             hide(window_name);
         } else if let Some(window_name) = message.strip_prefix("toggle_") && toggle(window_name) {
             match window_name {
-                "overview" => {
-                    let _ = ipc::client::send_message("update_overview_windows");
-                },
-
                 "clipboard" => {
                     let _ = ipc::client::send_message("update_clipboard_window_entries");
                 },

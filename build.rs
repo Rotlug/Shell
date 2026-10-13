@@ -43,17 +43,6 @@ fn main() {
     generate_default_styles();
     println!("cargo:rerun-if-changed=styles");
     
-    // Build FFI bindings for libqalculate
-    cxx_build::bridge("src/ffi/libqalculate.rs")
-        .file("src/ffi/libqalculate/main.cc")
-        .include("src/ffi/libqalculate")
-        .compile("libqalculate_ffi");
-
-    println!("cargo:rustc-link-lib=qalculate");
-    println!("cargo:rerun-if-changed=src/ffi/libqalculate.rs");
-    println!("cargo:rerun-if-changed=src/ffi/libqalculate/main.h");
-    println!("cargo:rerun-if-changed=src/ffi/libqalculate/main.cc");
-
     // Build FFI bindings for astal-wireplumber
     cxx_build::bridge("src/ffi/astalwp.rs")
         .file("src/ffi/astalwp/main.cc")

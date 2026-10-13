@@ -99,7 +99,6 @@ fn activate(application: &Application) {
 
     APP_LOCAL.with(|app| {
         let mut windows = app.windows.borrow_mut();
-        windows.insert("overview".into(), Box::new(widgets::windows::overview::new(application)));
         windows.insert("session".into(), Box::new(widgets::windows::session::new(application)));
         windows.insert("left_sidebar".into(), Box::new(widgets::windows::sidebar_left::new(application)));
         windows.insert("right_sidebar".into(), Box::new(widgets::windows::sidebar_right::new(application)));
