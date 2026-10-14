@@ -43,7 +43,15 @@
             version = "0.1.0";
             src = ./.;
 
-            cargoLock.lockFile = ./Cargo.lock;
+            cargoLock = {
+              lockFile = ./Cargo.lock;
+              # pwmixer is consumed straight from its upstream repo (a
+              # workspace member, not the repo root) rather than vendored,
+              # so Nix needs an explicit hash for that git source.
+              outputHashes = {
+                "pwmixer-0.1.0" = "sha256-XX2iHvgKpVUyDS+mzJ8sIzMpjnRGQXtge/UZ3ol2cj4=";
+              };
+            };
 
             nativeBuildInputs = with pkgs; [
               pkg-config
