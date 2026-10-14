@@ -343,9 +343,14 @@ fn players_list() -> gtk::Box {
         move |difference, size| {
             match difference {
                 VecDiff::Push { value } => {
-                    // `size` is the post-push player count, so the index of
-                    // the just-appended item is always `size - 1`.
-                    let row = players_list_item(&value, size - 1);
+                    // The new item's index is wherever it lands in `bx`,
+                    // i.e. however many rows are already there - `size`
+                    // can't be used for this: the initial-enumeration call
+                    // site (unlike live Push events) passes each player's
+                    // own index rather than a running count, since it's
+                    // replaying the whole already-existing list in order.
+                    let index = bx.iter_children().count();
+                    let row = players_list_item(&value, index);
                     bx.append(&row);
                 }
                 

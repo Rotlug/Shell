@@ -122,11 +122,11 @@ where
     });
 
     // add all current players
-    let value = MPRIS.players.lock_ref().len();
-    for index in 0..value {
+    let count = MPRIS.players.lock_ref().len();
+    for index in 0..count {
         let callback = callback.clone();
         let player = MPRIS.players.lock_ref().get(index).cloned().unwrap();
-        glib::source::idle_add_local_once(move || callback(VecDiff::Push { value: player }, index));
+        glib::source::idle_add_local_once(move || callback(VecDiff::Push { value: player }, count));
     }
 }
 
