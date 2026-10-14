@@ -29,6 +29,10 @@ fn get_temperature_label_text(cpu_temp: f64) -> String {
     format!("({:.1}°C)", cpu_temp)
 }
 
+fn get_battery_status_label_text(charging: bool) -> String {
+    format!("({})", if charging { "Charging" } else { "Discharging" })
+}
+
 pub fn minimal() -> gtk::Box {
     let create_sysstats_item = |icon: &str, label: &gtk::Label, detail_label: &gtk::Label| -> gtk::Box {
         let box_ = gtk::Box::new(gtk::Orientation::Horizontal, 0);
@@ -82,16 +86,16 @@ pub fn minimal() -> gtk::Box {
             set_halign: gtk::Align::Start,
         },
 
-        gpu_usage_label = gtk::Label {
+        battery_usage_label = gtk::Label {
             set_halign: gtk::Align::Start,
         },
 
-        gpu_temperature_label = gtk::Label {
+        battery_status_label = gtk::Label {
             set_css_classes: &["bar-sysstats-detailed-label"],
             set_halign: gtk::Align::Start,
         },
 
-        swap_usage_box = create_sysstats_item("", &swap_usage_label, &detailed_swap_usage_label),
+        swap_usage_box = create_sysstats_item("", &swap_usage_label, &detailed_swap_usage_label),
 
         widget = gtk::Box {
             set_hexpand: false,
@@ -99,7 +103,7 @@ pub fn minimal() -> gtk::Box {
             create_sysstats_item("󰍛", &ram_usage_label, &detailed_ram_usage_label) {},
             append: &swap_usage_box,
             create_sysstats_item("󰻠", &cpu_usage_label, &cpu_temperature_label) {},
-            create_sysstats_item("󰢮", &gpu_usage_label, &gpu_temperature_label) {}
+            create_sysstats_item("󰁹", &battery_usage_label, &battery_status_label) {}
         }
     }
 
@@ -122,12 +126,12 @@ pub fn minimal() -> gtk::Box {
         cpu_temperature_label.set_label(&get_temperature_label_text(cpu_temp));
     }));
 
-    glib::spawn_future_local(signal!(SYS_STATS.gpu_utilization, (gpu_utilization) {
-        gpu_usage_label.set_label(&format_percentage(gpu_utilization));
+    glib::spawn_future_local(signal!(SYS_STATS.battery_percentage, (battery_percentage) {
+        battery_usage_label.set_label(&format_percentage(battery_percentage));
     }));
-    
-    glib::spawn_future_local(signal!(SYS_STATS.gpu_temperature, (gpu_temperature) {
-        gpu_temperature_label.set_label(&get_temperature_label_text(gpu_temperature));
+
+    glib::spawn_future_local(signal!(SYS_STATS.battery_charging, (battery_charging) {
+        battery_status_label.set_label(&get_battery_status_label_text(battery_charging));
     }));
 
     widget

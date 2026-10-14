@@ -11,7 +11,7 @@ pub fn overview() -> gtk::Box {
     let cpu_stat_row = CompactStatRow::new("CPU", true);
     let mem_stat_row = CompactStatRow::new("RAM", true);
     let swap_stat_row = CompactStatRow::new("SWAP", true);
-    let gpu_stat_row = CompactStatRow::new("GPU", true);
+    let battery_stat_row = CompactStatRow::new("BATTERY", true);
     let vram_stat_row = CompactStatRow::new("VRAM", true);
 
     view! {
@@ -22,7 +22,7 @@ pub fn overview() -> gtk::Box {
             append: &cpu_stat_row.container,
             append: &mem_stat_row.container,
             append: &swap_stat_row.container,
-            append: &gpu_stat_row.container,
+            append: &battery_stat_row.container,
             append: &vram_stat_row.container,
         },
     }
@@ -55,14 +55,14 @@ pub fn overview() -> gtk::Box {
     }));
 
     glib::spawn_future_local({
-        let gpu_stat_row = gpu_stat_row.clone();
-        signal!(SYS_STATS.gpu_utilization, (gpu_utilization) {
-            gpu_stat_row.set_value(&format!("{:.1}%", gpu_utilization));
+        let battery_stat_row = battery_stat_row.clone();
+        signal!(SYS_STATS.battery_percentage, (battery_percentage) {
+            battery_stat_row.set_value(&format!("{:.1}%", battery_percentage));
         })
     });
-    
-    glib::spawn_future_local(signal!(SYS_STATS.gpu_temperature, (gpu_temperature) {
-        gpu_stat_row.set_secondary_value(&format!("{:.1}°C", gpu_temperature));
+
+    glib::spawn_future_local(signal!(SYS_STATS.battery_charging, (battery_charging) {
+        battery_stat_row.set_secondary_value(if battery_charging { "Charging" } else { "Discharging" });
     }));
 
     glib::spawn_future_local(signal!(SYS_STATS.gpu_memory, (gpu_memory) {
