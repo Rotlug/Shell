@@ -92,10 +92,13 @@
               cargo
               rustfmt
               clippy
+              dart-sass
             ];
 
             shellHook = ''
-              export PKG_CONFIG_PATH="${pkgs.lib.makeSearchPathOutput "dev" "lib/pkgconfig" nativeLibs}:$PKG_CONFIG_PATH"
+              export PKG_CONFIG_PATH="${
+                pkgs.lib.makeSearchPathOutput "dev" "lib/pkgconfig" nativeLibs
+              }:$PKG_CONFIG_PATH"
             '';
           };
         };
