@@ -88,33 +88,29 @@ impl MasterControls {
         volume_slider.set_draw_value(false);
         volume_slider.set_hexpand(true);
         volume_slider.set_value(0.0);
-        volume_slider.connect_value_changed(clone!(
+        // NOTE: don't attach a GestureDrag to send volume on drag - GtkRange/GtkScale
+        // already drag the slider itself via its own internal gesture, and ours would
+        // race it to claim the pointer sequence, which can leave the slider dead to
+        // mouse input. `change-value` is GTK's own signal for user-driven changes
+        // (drag, click-to-jump, keyboard, scroll) and doesn't need a competing gesture.
+        volume_slider.connect_change_value(clone!(
             #[strong] type_,
-            move |slider| {
-                let value = slider.value();
+            move |_, _, value| {
                 if let Some(endpoint) = match type_ {
                     EndpointType::Microphone => wireplumber::get_default_microphone(),
                     _ => wireplumber::get_default_speaker(),
                 } {
                     wireplumber::set_node_volume(endpoint.node.id, value as f32);
                 }
+                glib::Propagation::Proceed
             }
         ));
-        
-        let volume_slider_drag_gesture = gtk::GestureDrag::new();
-        volume_slider_drag_gesture.connect_drag_begin(clone!(
+        volume_slider.connect_state_flags_changed(clone!(
             #[strong] is_dragging_volume,
-            move |_, _, _| {
-                *is_dragging_volume.borrow_mut() = true;
+            move |slider, _| {
+                *is_dragging_volume.borrow_mut() = slider.state_flags().contains(gtk::StateFlags::ACTIVE);
             }
         ));
-        volume_slider_drag_gesture.connect_drag_end(clone!(
-            #[strong] is_dragging_volume,
-            move |_, _, _| {
-                *is_dragging_volume.borrow_mut() = false;
-            }
-        ));
-        volume_slider.add_controller(volume_slider_drag_gesture);
         volume_slider.add_controller(gesture::on_vertical_scroll(clone!(
             #[weak] volume_slider,
             #[strong] type_,
