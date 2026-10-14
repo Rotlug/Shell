@@ -12,6 +12,7 @@ mod modules {
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use cairo::{RectangleInt, Region};
 use gtk::prelude::*;
 use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell as _};
 
@@ -182,6 +183,37 @@ impl BarWindow {
         self.set_steal_window_visibility();
     }
     
+    /// The steal window spans the whole screen (so clicking anywhere, even
+    /// over unrelated background windows, can dismiss an expanded module),
+    /// but it's a *separate* layer-shell surface from the bar window. Nothing
+    /// guarantees it stacks below the bar - compositors that raise the most
+    /// recently (re-)mapped surface on a layer put it on top instead, where
+    /// it swallows clicks meant for the bar's own content (e.g. the MPRIS
+    /// buttons), making them appear to just close the dropdown. Punch a hole
+    /// over the bar window's actual on-screen rectangle so those clicks
+    /// always reach the real window underneath, regardless of stacking order.
+    fn update_steal_window_input_region(&self) {
+        let Some(surface) = self.steal_window.native().and_then(|n| n.surface()) else {
+            return;
+        };
+
+        let monitor_geometry = self.monitor.geometry();
+        let region = Region::create_rectangle(&RectangleInt::new(
+            0,
+            0,
+            monitor_geometry.width(),
+            monitor_geometry.height(),
+        ));
+        let _ = region.subtract_rectangle(&RectangleInt::new(
+            0,
+            0,
+            monitor_geometry.width(),
+            self.window.height().max(BAR_HEIGHT),
+        ));
+
+        surface.set_input_region(&region);
+    }
+
     pub fn set_steal_window_visibility(&self) {
         glib::idle_add_local_once(clone!(
             #[weak(rename_to = me)] self,
@@ -191,6 +223,7 @@ impl BarWindow {
                     me.steal_window.set_visible(true);
                     me.window.set_layer(Layer::Overlay);
                     me.window.set_keyboard_mode(KeyboardMode::OnDemand);
+                    me.update_steal_window_input_region();
                 } else {
                     me.steal_window.set_visible(false);
                     me.window.set_layer(Layer::Top);
