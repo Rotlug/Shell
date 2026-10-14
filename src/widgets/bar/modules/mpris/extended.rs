@@ -343,7 +343,9 @@ fn players_list() -> gtk::Box {
         move |difference, size| {
             match difference {
                 VecDiff::Push { value } => {
-                    let row = players_list_item(&value, size);
+                    // `size` is the post-push player count, so the index of
+                    // the just-appended item is always `size - 1`.
+                    let row = players_list_item(&value, size - 1);
                     bx.append(&row);
                 }
                 

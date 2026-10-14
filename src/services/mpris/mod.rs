@@ -21,7 +21,11 @@ pub struct Mpris {
 pub static MPRIS: LazyLock<Mpris> = LazyLock::new(Mpris::default);
 
 fn assert_default_player() {
-    if MPRIS.default_player.get() > MPRIS.players.lock_ref().len() - 1 {
+    // `len() - 1` would underflow once players is empty - compare against
+    // len() directly instead (true for every index, including 0, when
+    // there are no players at all, which correctly routes into
+    // set_default_player's own empty-players fallback below).
+    if MPRIS.default_player.get() >= MPRIS.players.lock_ref().len() {
         set_default_player(0);
     }
 }
@@ -103,7 +107,7 @@ where
 
                 glib::source::idle_add_local_once(move || {
                     assert_default_player();
-                    callback(difference, MPRIS.players.lock_ref().len() - 1);
+                    callback(difference, MPRIS.players.lock_ref().len());
                 });
             };
 
