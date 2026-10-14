@@ -66,6 +66,16 @@
             # release build rather than fighting those.
             RUSTFLAGS = "--cap-lints warn";
 
+            # scss.rs shells out to the `sass` CLI (Dart Sass) at startup to
+            # compile styles - it's not a build-time dependency so it isn't
+            # caught by buildInputs/cargo at all, just a hard runtime
+            # requirement. wrapGAppsHook4 already wraps the binary; this
+            # appends to that same wrapper instead of adding a second,
+            # conflicting one.
+            preFixup = ''
+              gappsWrapperArgs+=(--prefix PATH : "${pkgs.lib.makeBinPath [ pkgs.dart-sass ]}")
+            '';
+
             meta = {
               description = "Inparsian's gray-meadows-shell (niri/Hyprland GTK4 desktop shell)";
               homepage = "https://github.com/Inparsian/gray-meadows-shell";
