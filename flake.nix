@@ -43,15 +43,7 @@
             version = "0.1.0";
             src = ./.;
 
-            cargoLock = {
-              lockFile = ./Cargo.lock;
-              # pwmixer is a git dependency (https://github.com/Rotlug/shell),
-              # not a crates.io one, so Nix needs a fixed-output hash for it
-              # to fetch deterministically in the sandbox.
-              outputHashes = {
-                "pwmixer-0.1.0" = "sha256-s9asB7abo0Gxn7NeA/Rq7A7V37PoSyVHvB8jzxVkZFI=";
-              };
-            };
+            cargoLock.lockFile = ./Cargo.lock;
 
             nativeBuildInputs = with pkgs; [
               pkg-config
@@ -72,8 +64,16 @@
             # requirement. wrapGAppsHook4 already wraps the binary; this
             # appends to that same wrapper instead of adding a second,
             # conflicting one.
+            # nvml-wrapper (sysstats GPU usage) dlopen()s libnvidia-ml.so at
+            # runtime rather than linking it - it's the proprietary driver's
+            # library, which on NixOS only ever lives under
+            # /run/opengl-driver/lib (not a normal ld.so search path), so
+            # without this the GPU usage readout silently stays at 0%.
             preFixup = ''
-              gappsWrapperArgs+=(--prefix PATH : "${pkgs.lib.makeBinPath [ pkgs.dart-sass ]}")
+              gappsWrapperArgs+=(
+                --prefix PATH : "${pkgs.lib.makeBinPath [ pkgs.dart-sass ]}"
+                --prefix LD_LIBRARY_PATH : /run/opengl-driver/lib
+              )
             '';
 
             meta = {
