@@ -80,31 +80,23 @@ where
     F: Fn(f32) + 'static
 {
     glib::spawn_future_local(async move {
+        // Seed from whatever's already resolved - a default speaker can
+        // exist before this subscription starts listening (e.g. this UI
+        // element is created after startup enumeration already settled).
+        if let Some(default_speaker) = get_default_speaker() {
+            callback(default_speaker.node.volume);
+        }
+
         let mut receiver = subscribe();
-        while let Ok(event) = receiver.recv().await {
-            match event {
-                WpEvent::CreateSpeaker(endpoint) => if endpoint.is_default {
-                    callback(endpoint.node.volume);
-                },
-
-                WpEvent::RemoveSpeaker(endpoint) => if let Some(default_speaker) = get_default_speaker()
-                    && default_speaker.node.id == endpoint.node.id
-                {
-                    callback(default_speaker.node.volume);
-                },
-
-                WpEvent::UpdateDefaultSpeaker(id) => if let Some(speaker) = get_endpoint(id) {
-                    callback(speaker.node.volume);
-                },
-
-                WpEvent::UpdateEndpoint(id, property_name) => if property_name == "volume"
-                    && let Some(default_speaker) = get_default_speaker()
-                    && default_speaker.node.id == id
-                {
-                    callback(default_speaker.node.volume);
-                },
-
-                _ => {}
+        while receiver.recv().await.is_ok() {
+            // Re-resolve the current default on every event rather than
+            // matching specific variants/ids - which default sink/source
+            // metadata actually resolves to, and when, isn't reliably
+            // orderable against node enumeration at startup, so trying to
+            // special-case "the right" event is fragile. Recomputing is
+            // cheap and always converges to the right value regardless.
+            if let Some(default_speaker) = get_default_speaker() {
+                callback(default_speaker.node.volume);
             }
         }
     });
