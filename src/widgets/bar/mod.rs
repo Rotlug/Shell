@@ -23,6 +23,32 @@ use self::base::{BarModule, hide_all_expanded_modules};
 
 static BAR_HEIGHT: i32 = 33;
 
+/// A widget's allocation (as returned by `allocation()`) is relative to its
+/// *direct* parent only. Walk every ancestor up to (but not including) the
+/// top-level window, summing their offsets, to get the widget's true
+/// position within the window - needed below to hit-test clicks against an
+/// expanded module's *actual* on-screen bounds, not just where it sits
+/// inside its immediate parent.
+fn window_relative_allocation(widget: &impl IsA<gtk::Widget>) -> gdk::Rectangle {
+    let widget = widget.as_ref();
+    let local = widget.allocation();
+    let (mut x, mut y) = (local.x(), local.y());
+
+    let mut ancestor = widget.parent();
+    while let Some(parent) = ancestor {
+        if parent.downcast_ref::<gtk::Window>().is_some() {
+            break;
+        }
+
+        let parent_allocation = parent.allocation();
+        x += parent_allocation.x();
+        y += parent_allocation.y();
+        ancestor = parent.parent();
+    }
+
+    gdk::Rectangle::new(x, y, local.width(), local.height())
+}
+
 #[derive(glib::Downgrade)]
 pub struct BarWindow {
     pub window: gtk::ApplicationWindow,
@@ -117,15 +143,8 @@ impl BarWindow {
             move |_, (px, py), (rx, ry)| {
                 if py > BAR_HEIGHT as f64 && ry > BAR_HEIGHT as f64 {
                     let not_inside_any = me.modules.borrow().values().filter(|module| module.expanded()).any(|module| {
-                        let mod_allocation = module.allocation();
-                        let parent_allocation = module.parent().expect("No parent for bar module").allocation();
-                        let allocation = gdk::Rectangle::new(
-                            mod_allocation.x() + parent_allocation.x(),
-                            mod_allocation.y() + parent_allocation.y(),
-                            mod_allocation.width(),
-                            mod_allocation.height(),
-                        );
-    
+                        let allocation = window_relative_allocation(module);
+
                         !allocation.contains_point(rx as i32, ry as i32)
                             && !allocation.contains_point(px as i32, py as i32)
                     });
