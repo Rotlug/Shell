@@ -28,7 +28,7 @@ libc = "0.2.189"
 notify = "8.2.0"
 num-traits = "0.2.19"
 nvml-wrapper = "0.11.0"
-pwmixer = { path = "vendor/pwmixer" }
+pwmixer = { git = "https://github.com/Rotlug/shell.git" }
 regex = "1.13.1"
 relm4 = "0.10.1"
 relm4-macros = "0.10.1"

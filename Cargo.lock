@@ -2092,6 +2092,7 @@ checksum = "1d8f70e07b9c3962945a74e59ca1c511bba65b6419468acc217c457d93f3c740"
 [[package]]
 name = "pwmixer"
 version = "0.1.0"
+source = "git+https://github.com/Rotlug/shell.git#66b301d7ca65c4d4261a5fb142a2cc16e9a722ed"
 dependencies = [
  "libspa",
  "libspa-sys",
