@@ -143,10 +143,24 @@ mod imp {
                 minimal_widget.size_allocate(&alloc, baseline);
                 nat_height
             });
-    
+
             let expanded_nat_height = self.expanded_widget.borrow().as_ref().map_or(height, |expanded_widget| {
+                // `width` is the module's *own* blended allocation, which
+                // can be (and while collapsed/animating, usually is) far
+                // narrower than the expanded content's actual minimum - it
+                // only converges to that minimum once `progress` reaches
+                // exactly 1.0, which the animation may never hit cleanly.
+                // Allocating the expanded widget strictly to `width`
+                // regardless violates its own size contract (GTK logs this
+                // as a CRITICAL) and - more importantly - hands it a layout
+                // that doesn't match what gets painted, so its children's
+                // (e.g. the MPRIS buttons') hit-test regions stop lining up
+                // with where they're actually drawn. Never give it less
+                // than it asked for.
+                let (exp_min_w, _, _, _) = expanded_widget.measure(gtk::Orientation::Horizontal, -1);
+                let expanded_width = width.max(exp_min_w);
                 let (_, nat_height, _, _) = expanded_widget.measure(gtk::Orientation::Vertical, -1);
-                let alloc = gtk::Allocation::new(0, 0, width, nat_height);
+                let alloc = gtk::Allocation::new(0, 0, expanded_width, nat_height);
                 expanded_widget.size_allocate(&alloc, baseline);
                 nat_height
             });
@@ -186,9 +200,13 @@ mod imp {
                     });
             
                     let expanded_nat = self.expanded_widget.borrow().as_ref().map_or((width, height), |expanded_widget| {
-                        let (_, nat_width, _, _) = expanded_widget.measure(gtk::Orientation::Horizontal, -1);
+                        let (exp_min_w, nat_width, _, _) = expanded_widget.measure(gtk::Orientation::Horizontal, -1);
                         let (_, nat_height, _, _) = expanded_widget.measure(gtk::Orientation::Vertical, -1);
-                        let alloc = gtk::Allocation::new(0, 0, width, nat_height);
+                        // Same reasoning as size_allocate(): never allocate
+                        // narrower than this widget's own minimum, or its
+                        // children's hit-test regions stop matching what's
+                        // actually painted.
+                        let alloc = gtk::Allocation::new(0, 0, width.max(exp_min_w), nat_height);
                         expanded_widget.size_allocate(&alloc, -1);
                         (nat_width, nat_height)
                     });
