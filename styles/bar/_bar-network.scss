@@ -1,0 +1,13 @@
+.bar-window .bar .bar-widget .bar-network-icon {
+    color: $foreground-color-primary;
+    min-width: 1.2em;
+    text-align: center;
+
+    &.limited, &.connecting {
+        color: $foreground-color-secondary;
+    }
+
+    &.disconnected {
+        color: $foreground-color-quaternary;
+    }
+}

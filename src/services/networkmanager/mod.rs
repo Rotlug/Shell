@@ -2,6 +2,7 @@ pub mod proxy;
 pub mod wrapper;
 pub mod enums;
 pub mod bus;
+pub mod status;
 
 use dbus::message::{MatchRule, MessageType};
 

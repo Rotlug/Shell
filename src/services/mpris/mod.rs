@@ -91,45 +91,6 @@ where
     }));
 }
 
-pub fn subscribe_to_player_list_changes<F>(callback: F)
-where
-    // vec diff and new list length
-    F: Fn(VecDiff<mpris_player::MprisPlayer>, usize) + 'static,
-{
-    let callback = Rc::new(callback);
-
-    glib::spawn_future_local({
-        let callback = callback.clone();
-
-        signal_vec_cloned!(MPRIS.players, (change) {
-            let run_callback = |difference| {
-                let callback = callback.clone();
-
-                glib::source::idle_add_local_once(move || {
-                    assert_default_player();
-                    callback(difference, MPRIS.players.lock_ref().len());
-                });
-            };
-
-            match change {
-                VecDiff::Push {..} |
-                VecDiff::RemoveAt {..} |
-                VecDiff::Pop {} |
-                VecDiff::Clear {} => run_callback(change),
-                _ => {}
-            }
-        })
-    });
-
-    // add all current players
-    let count = MPRIS.players.lock_ref().len();
-    for index in 0..count {
-        let callback = callback.clone();
-        let player = MPRIS.players.lock_ref().get(index).cloned().unwrap();
-        glib::source::idle_add_local_once(move || callback(VecDiff::Push { value: player }, count));
-    }
-}
-
 #[allow(clippy::option_if_let_else)]
 pub fn with_default_player_mut<F, R>(func: F) -> Option<R>
 where

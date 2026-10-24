@@ -49,7 +49,7 @@
               # workspace member, not the repo root) rather than vendored,
               # so Nix needs an explicit hash for that git source.
               outputHashes = {
-                "pwmixer-0.1.0" = "sha256-XX2iHvgKpVUyDS+mzJ8sIzMpjnRGQXtge/UZ3ol2cj4=";
+                "pwmixer-0.1.0" = "sha256-l3Z05EwBiX8jnToKk9cQX6qs4RBW+177oe+7iwirE1g=";
               };
             };
 

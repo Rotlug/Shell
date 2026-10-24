@@ -7,12 +7,12 @@ mod modules {
     pub mod clock;
     pub mod tray;
     pub mod volume;
+    pub mod network;
 }
 
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use cairo::{RectangleInt, Region};
 use gtk::prelude::*;
 use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell as _};
 
@@ -54,7 +54,6 @@ fn window_relative_allocation(widget: &impl IsA<gtk::Widget>) -> gdk::Rectangle 
 pub struct BarWindow {
     pub window: gtk::ApplicationWindow,
     pub monitor: gdk::Monitor,
-    pub steal_window: gtk::ApplicationWindow,
     pub modules: Rc<RefCell<HashMap<String, BarModule>>>,
 }
 
@@ -92,6 +91,7 @@ impl BarWindow {
                 set_valign: gtk::Align::Start,
 
                 append: &modules::tray::new(),
+                append: &modules::network::new(),
                 append: &modules::volume::new(),
             },
 
@@ -114,48 +114,25 @@ impl BarWindow {
                     set_center_widget: Some(&center_box),
                     set_end_widget: Some(&right_box),
                 }
-            },
-
-            steal_window = gtk::ApplicationWindow {
-                set_visible: false,
-                set_css_classes: &["bar-steal-window"],
-                set_application: Some(application),
-                init_layer_shell: (),
-                set_monitor: Some(monitor),
-                set_layer: Layer::Overlay,
-                set_anchor: (Edge::Left, true),
-                set_anchor: (Edge::Right, true),
-                set_anchor: (Edge::Top, true),
-                set_anchor: (Edge::Bottom, true),
-                set_namespace: Some("gms-bar-steal")
             }
         }
-        
+
         let me = BarWindow {
             window,
             monitor: monitor.clone(),
-            steal_window,
             modules,
         };
 
-        // collapse expanded modules when clicking outside of them
+        // Collapse expanded modules when clicking elsewhere *within this
+        // window* (e.g. on the clock while the MPRIS module is open).
         me.window.add_controller(gesture::on_primary_full_press(clone!(
             #[weak] me,
-            move |_, (px, py), (rx, ry)| {
-                if py > BAR_HEIGHT as f64 && ry > BAR_HEIGHT as f64 {
-                    let not_inside_any = me.modules.borrow().values().filter(|module| module.expanded()).any(|module| {
-                        let allocation = window_relative_allocation(module);
-
-                        !allocation.contains_point(rx as i32, ry as i32)
-                            && !allocation.contains_point(px as i32, py as i32)
-                    });
-
-                    if not_inside_any {
-                        hide_all_expanded_modules();
-                    }
+            move |_, press, release| {
+                if me.should_hide_on_click(press, release) {
+                    hide_all_expanded_modules();
                 }
 
-                me.set_steal_window_visibility();
+                me.set_keyboard_mode();
             }
         )));
 
@@ -163,15 +140,26 @@ impl BarWindow {
             #[weak] me,
             move |_, _, _| {
                 // usually signifies that a module is being collapsed, but we should make sure that all are collapsed
-                me.set_steal_window_visibility();
+                me.set_keyboard_mode();
             }
         )));
 
-        // the bar window should be above the steal window, we can assume any click here is outside the bar
-        me.steal_window.add_controller(gesture::on_primary_up(move |_, _, _| {
-            hide_all_expanded_modules();
-        }));
-        
+        // Collapse expanded modules when the bar loses focus entirely (e.g.
+        // the user clicked a *different* application's window). A separate
+        // always-on-top "steal window" used to be layered over the rest of
+        // the screen to catch exactly this - but it's its own Wayland
+        // surface, stacked independently of the bar window with no
+        // guaranteed ordering between the two, and in practice ended up
+        // swallowing clicks genuinely meant for the bar's own expanded
+        // content (e.g. the MPRIS buttons) just as often as it caught real
+        // outside clicks. The compositor's own notion of window focus has
+        // no such stacking ambiguity.
+        me.window.connect_is_active_notify(move |window| {
+            if !window.is_active() {
+                hide_all_expanded_modules();
+            }
+        });
+
         me
     }
 
@@ -180,52 +168,41 @@ impl BarWindow {
             module.set_expanded(false);
         }
 
-        self.set_steal_window_visibility();
-    }
-    
-    /// The steal window spans the whole screen (so clicking anywhere, even
-    /// over unrelated background windows, can dismiss an expanded module),
-    /// but it's a *separate* layer-shell surface from the bar window. Nothing
-    /// guarantees it stacks below the bar - compositors that raise the most
-    /// recently (re-)mapped surface on a layer put it on top instead, where
-    /// it swallows clicks meant for the bar's own content (e.g. the MPRIS
-    /// buttons), making them appear to just close the dropdown. Punch a hole
-    /// over the bar window's actual on-screen rectangle so those clicks
-    /// always reach the real window underneath, regardless of stacking order.
-    fn update_steal_window_input_region(&self) {
-        let Some(surface) = self.steal_window.native().and_then(|n| n.surface()) else {
-            return;
-        };
-
-        let monitor_geometry = self.monitor.geometry();
-        let region = Region::create_rectangle(&RectangleInt::new(
-            0,
-            0,
-            monitor_geometry.width(),
-            monitor_geometry.height(),
-        ));
-        let _ = region.subtract_rectangle(&RectangleInt::new(
-            0,
-            0,
-            monitor_geometry.width(),
-            self.window.height().max(BAR_HEIGHT),
-        ));
-
-        surface.set_input_region(&region);
+        self.set_keyboard_mode();
     }
 
-    pub fn set_steal_window_visibility(&self) {
+    /// Whether a click within this window, but outside every expanded
+    /// module's own bounds (e.g. on the clock while the MPRIS module is
+    /// open), should collapse them all.
+    fn should_hide_on_click(&self, (px, py): (f64, f64), (rx, ry): (f64, f64)) -> bool {
+        if py <= BAR_HEIGHT as f64 || ry <= BAR_HEIGHT as f64 {
+            // Clicks on the bar's own row are handled by each module's own
+            // click gesture (which collapses every other module when one
+            // of them is opened) - not here.
+            return false;
+        }
+
+        self.modules.borrow().values().filter(|module| module.expanded()).any(|module| {
+            let allocation = window_relative_allocation(module);
+
+            !allocation.contains_point(rx as i32, ry as i32)
+                && !allocation.contains_point(px as i32, py as i32)
+        })
+    }
+
+    /// While a module is expanded, promote the bar above other windows and
+    /// let it take keyboard focus on demand - needed for connect_is_active_notify
+    /// (see its call site) to actually notice focus moving to another
+    /// window later.
+    pub fn set_keyboard_mode(&self) {
         glib::idle_add_local_once(clone!(
             #[weak(rename_to = me)] self,
             move || {
                 let any_expanded = me.modules.borrow().values().any(|module| module.expanded());
                 if any_expanded {
-                    me.steal_window.set_visible(true);
                     me.window.set_layer(Layer::Overlay);
                     me.window.set_keyboard_mode(KeyboardMode::OnDemand);
-                    me.update_steal_window_input_region();
                 } else {
-                    me.steal_window.set_visible(false);
                     me.window.set_layer(Layer::Top);
                     me.window.set_keyboard_mode(KeyboardMode::None);
                 }
@@ -243,7 +220,7 @@ pub fn toggle_module_by_name(name: &str) {
         for bar_window in &*app.bars.borrow() {
             if bar_window.monitor == monitor && let Some(module) = bar_window.modules.borrow().get(name) {
                 module.set_expanded(!module.expanded());
-                bar_window.set_steal_window_visibility();
+                bar_window.set_keyboard_mode();
             }
         }
     });

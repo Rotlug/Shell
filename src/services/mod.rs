@@ -19,6 +19,7 @@ pub async fn activate_all() {
     wireplumber::activate();
     notifications::activate();
     //networkmanager::activate();
+    networkmanager::status::activate();
     clipboard::activate();
     idle_inhibitor::activate().await;
 }

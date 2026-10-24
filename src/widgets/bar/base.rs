@@ -341,7 +341,24 @@ mod imp {
                 .easing(libadwaita::Easing::EaseOutExpo)
                 .target(&target)
                 .build();
-            
+
+            // Force an exact settle at the target value once the animation
+            // finishes. measure() blends by `progress`, and its result is
+            // what GTK actually allocates (and thus hit-tests input
+            // against) - so if this ever lands a fraction short of exactly
+            // 0.0/1.0 (interpolation float error, a skip() racing the final
+            // tick, etc.), the module's real footprint stays a hair
+            // narrower than its content forever, leaving things like the
+            // MPRIS buttons sitting just outside their own hit-test region.
+            anim.connect_done(clone!(
+                #[weak] obj,
+                move |_| {
+                    let imp = obj.imp();
+                    imp.progress.set(end);
+                    obj.queue_resize();
+                }
+            ));
+
             anim.play();
             *self.animation.borrow_mut() = Some(anim.upcast());
         }

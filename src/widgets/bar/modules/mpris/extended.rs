@@ -1,8 +1,6 @@
-use futures_signals::signal_vec::VecDiff;
 use gtk::prelude::*;
-use relm4::RelmIterChildrenExt as _;
 
-use crate::services::mpris::{self, MPRIS, mpris_player::PlaybackStatus, set_default_player};
+use crate::services::mpris::{self, mpris_player::PlaybackStatus};
 use crate::utils::gesture;
 use super::progress;
 
@@ -311,99 +309,6 @@ fn default_mpris_player() -> gtk::Box {
     widget
 }
 
-fn players_list_item(player: &mpris::mpris_player::MprisPlayer, index: usize) -> gtk::Button {
-    // <icon icon={player.get_bus_name().split(".")[player.get_bus_name().split(".").length - 1]}/>
-    let identifier = player.bus.split('.').next_back().unwrap_or("emote-love");
-
-    view! {
-        child = gtk::Button {
-            set_css_classes: &["bar-mpris-players-list-item"],
-            set_hexpand: false,
-            connect_clicked => move |_| set_default_player(index),
-
-            gtk::Image {
-                set_css_classes: &["bar-mpris-players-list-item-icon"],
-                set_icon_name: Some(identifier),
-                set_pixel_size: 16,
-                set_halign: gtk::Align::Center,
-            },
-        }
-    }
-
-    child
-}
-
-fn players_list() -> gtk::Box {
-    let bx = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-    bx.set_css_classes(&["bar-mpris-players-list"]);
-    bx.set_hexpand(true);
-
-    mpris::subscribe_to_player_list_changes(clone!(
-        #[weak] bx,
-        move |difference, size| {
-            match difference {
-                VecDiff::Push { value } => {
-                    // The new item's index is wherever it lands in `bx`,
-                    // i.e. however many rows are already there - `size`
-                    // can't be used for this: the initial-enumeration call
-                    // site (unlike live Push events) passes each player's
-                    // own index rather than a running count, since it's
-                    // replaying the whole already-existing list in order.
-                    let index = bx.iter_children().count();
-                    let row = players_list_item(&value, index);
-                    bx.append(&row);
-                }
-                
-                VecDiff::RemoveAt { index, .. } => if let Some(child) = bx.iter_children().nth(index) {
-                    bx.remove(&child);
-                }
-
-                VecDiff::Pop {} => if let Some(child) = bx.iter_children().last() {
-                    bx.remove(&child);
-                }
-
-                VecDiff::Clear {} => bx.iter_children().for_each(|child| {
-                    bx.remove(&child);
-                }),
-
-                _ => {}
-            }
-
-            if size < 1 {
-                bx.hide();
-            } else {
-                bx.show();
-            }
-        }
-    ));
-
-    mpris::subscribe_to_default_player_changes(clone!(
-        #[weak] bx,
-        move |index| {
-            bx.iter_children().for_each(|child| {
-                child.set_css_classes(&["bar-mpris-players-list-item"]);
-            });
-
-            if let Some(selected_child) = bx.iter_children().nth(index) {
-                selected_child.set_css_classes(&["bar-mpris-players-list-item", "is-default"]);
-            }
-        }
-    ));
-
-    bx.add_controller(gesture::on_vertical_scroll(|delta_y| {
-        let delta_index = if delta_y < 0.0 { 1 } else { -1 };
-        let current_index = MPRIS.default_player.get() as isize;
-        let players_count = MPRIS.players.lock_ref().len() as isize;
-
-        if players_count > 0 {
-            let new_index = (current_index + delta_index + players_count) % players_count;
-            set_default_player(new_index as usize);
-        }
-    }));
-
-    bx
-}
-
 pub fn extended() -> gtk::Box {
     view! {
         widget = gtk::Box {
@@ -412,7 +317,6 @@ pub fn extended() -> gtk::Box {
             set_spacing: 0,
 
             append: &default_mpris_player(),
-            append: &players_list(),
         },
     }
 
