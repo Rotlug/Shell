@@ -7,7 +7,7 @@
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use tokio::sync::mpsc::Sender;
@@ -15,7 +15,7 @@ use zbus::{fdo, interface, object_server::SignalEmitter, zvariant};
 
 use crate::{
     event::Event,
-    notification::{Action, ClosingReason, Notification, Urgency},
+    notification::{Action, ClosingReason, Notification, Timeout, Urgency},
 };
 
 #[derive(Debug)]
@@ -87,10 +87,11 @@ impl Daemon {
             .map(|v: u8| Urgency::from(u64::from(v)))
             .unwrap_or_default();
 
-        let expire_timeout = if expire_timeout > 0 {
-            Some(Duration::from_millis(expire_timeout as u64))
-        } else {
-            None
+        let string_hint = |key: &str| {
+            hints
+                .get(key)
+                .and_then(|v| <&str>::try_from(v).ok())
+                .map(str::to_string)
         };
 
         let timestamp = SystemTime::now()
@@ -107,8 +108,11 @@ impl Daemon {
             app_icon,
             summary,
             body,
-            expire_timeout,
+            expire_timeout: Timeout::from(expire_timeout),
             urgency,
+            category: string_hint("category"),
+            desktop_entry: string_hint("desktop-entry"),
+            image_path: string_hint("image-path"),
             timestamp,
             actions,
         };

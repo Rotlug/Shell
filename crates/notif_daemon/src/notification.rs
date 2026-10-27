@@ -56,6 +56,28 @@ impl From<u32> for ClosingReason {
     }
 }
 
+/* Timeout */
+/// How long a notification should be displayed, as requested by the sender.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum Timeout {
+    /// Up to the daemon (the sender passed `-1`)
+    #[default]
+    Default,
+    /// Stays until the user dismisses it (the sender passed `0`)
+    Never,
+    After(Duration),
+}
+
+impl From<i32> for Timeout {
+    fn from(millis: i32) -> Self {
+        match u64::try_from(millis) {
+            Ok(0) => Self::Never,
+            Ok(millis) => Self::After(Duration::from_millis(millis)),
+            Err(_) => Self::Default,
+        }
+    }
+}
+
 /* Notification */
 #[derive(Debug, Clone)]
 pub struct Notification {
@@ -69,10 +91,16 @@ pub struct Notification {
     pub summary: String,
     /// Body text
     pub body: String,
-    /// The duration that the notification is on screen
-    pub expire_timeout: Option<Duration>,
+    /// How long the notification stays on screen
+    pub expire_timeout: Timeout,
     /// Urgency level
     pub urgency: Urgency,
+    /// The type of notification, e.g. `email.arrived` (the `category` hint)
+    pub category: Option<String>,
+    /// The desktop file name of the sending application, without `.desktop` (the `desktop-entry` hint)
+    pub desktop_entry: Option<String>,
+    /// Path or URI of an image to display (the `image-path` hint)
+    pub image_path: Option<String>,
     /// Timestamp of when the notification has been created
     pub timestamp: u64,
     /// The actions the user can take on the notifications (buttons)

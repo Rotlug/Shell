@@ -16,7 +16,6 @@ use crate::{
 #[derive(Debug)]
 pub struct Menu {
     proxy: DBusMenuProxy<'static>,
-    connection: Connection,
     handles: Mutex<Vec<JoinHandle<()>>>,
     event_tx: Sender<Event>,
     owner_address: String,
@@ -38,7 +37,6 @@ impl Menu {
 
         Ok(Self {
             proxy,
-            connection,
             handles: Mutex::new(Vec::new()),
             event_tx,
             owner_address: address,
@@ -48,13 +46,19 @@ impl Menu {
     /// Spawn the task for updating `items`
     pub async fn watch_updates(&self) -> crate::Result<()> {
         let mut item_properties_updated = self.proxy.receive_items_properties_updated().await?;
+        let mut layout_updated = self.proxy.receive_layout_updated().await?;
 
         let proxy = self.proxy.clone();
 
         let event_tx = self.event_tx.clone();
         let owner_address = self.owner_address.clone();
         let handle = tokio::spawn(async move {
-            while (item_properties_updated.next().await).is_some() {
+            // Players tell us about changes of the menu through either of these signals
+            while tokio::select! {
+                Some(_) = item_properties_updated.next() => true,
+                Some(_) = layout_updated.next() => true,
+                else => false,
+            } {
                 if let Ok((_, layout)) = proxy.get_layout(0, -1, &[]).await
                     && let Ok(items) = Self::parse_layout(layout)
                 {
@@ -96,8 +100,10 @@ impl Menu {
     fn parse_layout(layout: MenuLayout) -> crate::Result<Vec<MenuItem>> {
         let mut items = vec![];
         for inner in layout.submenus {
-            let item = MenuItem::try_from(&inner)?;
-            items.push(item);
+            // A single entry we can't make sense of shouldn't take the whole menu down with it
+            if let Ok(item) = MenuItem::try_from(&inner) {
+                items.push(item);
+            }
         }
 
         Ok(items)
@@ -107,9 +113,7 @@ impl Menu {
 impl Drop for Menu {
     fn drop(&mut self) {
         // Abort all handles when the menu item is dropped
-        let guard = self.handles.try_lock().unwrap();
-
-        for handle in guard.iter() {
+        for handle in self.handles.get_mut().iter() {
             handle.abort();
         }
     }

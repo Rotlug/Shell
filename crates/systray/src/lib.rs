@@ -1,4 +1,5 @@
 mod dbus;
+mod watcher;
 
 pub mod tray;
 

@@ -4,7 +4,9 @@ use tokio::sync::{
     Mutex,
     mpsc::{Receiver, Sender, channel},
 };
-use zbus::{Connection, object_server::SignalEmitter};
+use zbus::{
+    Connection, fdo::RequestNameFlags, object_server::SignalEmitter,
+};
 
 use crate::{
     daemon::{Daemon, DaemonSignals},
@@ -47,20 +49,37 @@ impl Manager {
         let signal_emitter = object_server.signal_emitter().to_owned();
 
         let notifications_task = notifications.clone();
+        let signal_emitter_task = signal_emitter.clone();
 
         tokio::spawn(async move {
             while let Some(event) = inner_rx.recv().await {
                 let mut notifs = notifications_task.lock().await;
 
-                match event {
-                    Event::Incoming(ref n) => {
-                        notifs.insert(n.id, n.clone());
+                let event = match event {
+                    Event::Incoming(n) | Event::Replaced(n) => {
+                        let replaced = notifs.insert(n.id, n.clone()).is_some();
+
+                        if replaced {
+                            Event::Replaced(n)
+                        } else {
+                            Event::Incoming(n)
+                        }
                     }
                     Event::Closed(id) => {
-                        notifs.remove(&id);
-                    }
-                }
+                        // Closing something that is already gone is not worth reporting
+                        if notifs.remove(&id).is_none() {
+                            continue;
+                        }
 
+                        let _ = signal_emitter_task
+                            .notification_closed(id, ClosingReason::Inner)
+                            .await;
+
+                        Event::Closed(id)
+                    }
+                };
+
+                drop(notifs);
                 let _ = outer_tx.send(event).await;
             }
         });
@@ -88,8 +107,12 @@ impl Manager {
             .at("/org/freedesktop/Notifications", daemon)
             .await?;
 
+        // Don't queue up behind another daemon, that would just silently never receive anything
         connection
-            .request_name("org.freedesktop.Notifications")
+            .request_name_with_flags(
+                "org.freedesktop.Notifications",
+                RequestNameFlags::DoNotQueue.into(),
+            )
             .await?;
 
         Ok(())
@@ -121,8 +144,12 @@ impl Manager {
         id: u32,
         reason: ClosingReason,
     ) -> crate::Result<Option<Notification>> {
-        self.signal_emitter.notification_closed(id, reason).await?;
+        let removed = self.notifications.lock().await.remove(&id);
 
-        Ok(self.notifications.lock().await.remove(&id))
+        if removed.is_some() {
+            self.signal_emitter.notification_closed(id, reason).await?;
+        }
+
+        Ok(removed)
     }
 }

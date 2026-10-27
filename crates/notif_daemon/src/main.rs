@@ -1,4 +1,4 @@
-use std::{sync::Arc, thread, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use notif_daemon::{event::Event, manager::Manager, notification::ClosingReason};
 
@@ -9,17 +9,13 @@ async fn main() -> notif_daemon::Result<()> {
 
     while let Some(event) = rx.recv().await {
         dbg!(&event);
-        match event {
-            Event::Incoming(notif) => {
-                let mgr_clone = mgr.clone();
-                tokio::spawn(async move {
-                    thread::sleep(Duration::from_secs(3));
-                    mgr_clone
-                        .close_notification(notif.id, ClosingReason::Inner)
-                        .await;
-                });
-            }
-            _ => {}
+
+        if let Event::Incoming(notif) = event {
+            let mgr = mgr.clone();
+            tokio::spawn(async move {
+                tokio::time::sleep(Duration::from_secs(3)).await;
+                let _ = mgr.close_notification(notif.id, ClosingReason::Expired).await;
+            });
         }
     }
 
