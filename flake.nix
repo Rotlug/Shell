@@ -42,7 +42,7 @@
             version = "0.1.0";
             src = ./.;
 
-            # The libraries are workspace members under crates/, so there
+            # The libraries are workspace members (libraries/ and crates/), so there
             # are no git dependencies to hash.
             cargoLock.lockFile = ./Cargo.lock;
 

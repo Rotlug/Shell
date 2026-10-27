@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-color = { path = "../color" }
+color = { path = "../../libraries/color" }
 notify = "8.2.0"
 regex = "1.13.1"
 thiserror = "2.0.18"

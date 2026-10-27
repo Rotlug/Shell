@@ -9,9 +9,9 @@ async-broadcast = "0.7.2"
 async-channel = "2.5.0"
 cairo-rs = "0.21.5"
 chrono = "0.4.45"
-network_manager = { path = "../crates/network_manager" }
-power_profiles = { path = "../crates/power_profiles" }
-system_stats = { path = "../crates/system_stats" }
+network_manager = { path = "../libraries/network_manager" }
+power_profiles = { path = "../libraries/power_profiles" }
+system_stats = { path = "../libraries/system_stats" }
 futures-signals = "0.3.34"
 gdk = { version = "0.10.3", package = "gdk4" }
 gio = "0.21.5"
@@ -25,17 +25,17 @@ niri-ipc = "26.4.0"
 image = "0.25.10"
 libadwaita = { version = "0.8.1", features = ["v1_4", "v1_7"] }
 libc = "0.2.189"
-brightness = { path = "../crates/brightness" }
-color = { path = "../crates/color" }
+brightness = { path = "../libraries/brightness" }
+color = { path = "../libraries/color" }
 gms_style = { path = "../crates/gms_style" }
 gms_ui = { path = "../crates/gms_ui" }
-discord = { path = "../crates/discord" }
-mpris = { path = "../crates/mpris" }
-notif_daemon = { path = "../crates/notif_daemon" }
-systray = { path = "../crates/systray" }
+discord = { path = "../libraries/discord" }
+mpris = { path = "../libraries/mpris" }
+notif_daemon = { path = "../libraries/notif_daemon" }
+systray = { path = "../libraries/systray" }
 notify = "8.2.0"
 num-traits = "0.2.19"
-volume_mixer = { path = "../crates/volume_mixer" }
+volume_mixer = { path = "../libraries/volume_mixer" }
 regex = "1.13.1"
 relm4 = "0.10.1"
 relm4-macros = "0.10.1"
