@@ -1,7 +1,7 @@
 use futures_signals::signal::SignalExt as _;
 use gtk::prelude::*;
 
-use crate::services::networkmanager::status::{ConnectionStatus, CONNECTION_STATUS};
+use crate::services::networkmanager::{ConnectionStatus, CONNECTION_STATUS};
 use super::super::base::BarModule;
 
 const WIFI_ICON: &str = "\u{f05a9}";

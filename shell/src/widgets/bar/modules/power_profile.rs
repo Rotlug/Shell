@@ -2,38 +2,38 @@ use futures_signals::signal::SignalExt as _;
 use gtk::prelude::*;
 
 use crate::utils::gesture;
-use crate::services::power_profiles::{self, PowerProfile, ACTIVE_PROFILE_STATE};
+use crate::services::power_profiles::{self, Profile, ACTIVE_PROFILE_STATE};
 use super::super::base::BarModule;
 
 const POWER_SAVER_ICON: &str = "\u{f032a}";
 const BALANCED_ICON: &str = "\u{f0f85}";
 const PERFORMANCE_ICON: &str = "\u{f04c5}";
 
-fn profile_icon(profile: PowerProfile) -> &'static str {
+fn profile_icon(profile: Profile) -> &'static str {
     match profile {
-        PowerProfile::PowerSaver => POWER_SAVER_ICON,
-        PowerProfile::Balanced => BALANCED_ICON,
-        PowerProfile::Performance => PERFORMANCE_ICON,
+        Profile::PowerSaver => POWER_SAVER_ICON,
+        Profile::Balanced => BALANCED_ICON,
+        Profile::Performance => PERFORMANCE_ICON,
     }
 }
 
-fn profile_css_class(profile: Option<PowerProfile>) -> &'static str {
+fn profile_css_class(profile: Option<Profile>) -> &'static str {
     match profile {
-        Some(profile) => profile.name(),
+        Some(profile) => profile.as_str(),
         None => "unavailable",
     }
 }
 
-fn profile_tooltip(profile: Option<PowerProfile>) -> &'static str {
+fn profile_tooltip(profile: Option<Profile>) -> &'static str {
     match profile {
-        Some(PowerProfile::PowerSaver) => "Power saver (click to switch)",
-        Some(PowerProfile::Balanced) => "Balanced (click to switch)",
-        Some(PowerProfile::Performance) => "Performance (click to switch)",
+        Some(Profile::PowerSaver) => "Power saver (click to switch)",
+        Some(Profile::Balanced) => "Balanced (click to switch)",
+        Some(Profile::Performance) => "Performance (click to switch)",
         None => "Power profiles are unavailable",
     }
 }
 
-fn apply(label: &gtk::Label, profile: Option<PowerProfile>) {
+fn apply(label: &gtk::Label, profile: Option<Profile>) {
     label.set_label(profile.map_or(BALANCED_ICON, profile_icon));
     label.set_css_classes(&["bar-power-profile-icon", profile_css_class(profile)]);
     label.set_tooltip_text(Some(profile_tooltip(profile)));

@@ -26,7 +26,6 @@
             pango
             gdk-pixbuf
             graphene
-            dbus
             wayland
             wayland-protocols
             openssl

@@ -19,9 +19,8 @@ pub async fn activate_all() {
     tray::activate().await;
     wireplumber::activate();
     notifications::activate().await;
-    //networkmanager::activate();
-    networkmanager::status::activate();
+    networkmanager::activate().await;
     clipboard::activate();
-    power_profiles::activate();
+    power_profiles::activate().await;
     idle_inhibitor::activate().await;
 }
