@@ -102,80 +102,95 @@ fn activate(application: &Application) {
     });
 }
 
-#[tokio::main]
-async fn main() {
+/// Sets everything up. Returns the application, which `main` runs: see there for why not here.
+async fn start_shell() -> Application {
+    tracing_subscriber::fmt()
+        .with_line_number(true)
+        .with_env_filter(EnvFilter::from_default_env()
+            .add_directive(LevelFilter::INFO.into()))
+        .with_timer(ChronoLocal::new("%H:%M:%S%.3f".to_owned()))
+        .init();
+
+    // Ensure that another instance of gray-meadows-shell is not running.
+    // gray-meadows-shell can hold on to it's socket for a bit after exiting so we'll
+    // try multiple times, in case this is being restarted right after a SIGTERM
+    for i in 1..=5 {
+        if ipc::client::get_stream().is_ok() {
+            if i == 5 {
+                error!("Looks like another instance of gray-meadows-shell is already running.");
+                std::process::exit(1);
+            }
+
+            warn!("Socket is taken, waiting for it to be released... ({}{} attempt)",
+                i,
+                if i == 1 { "st" } else if i == 2 { "nd" } else if i == 3 { "rd" } else { "th" }
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+    }
+    
+    tokio::spawn(async {
+        if let Err(e) = ipc::server::start().await {
+            error!(%e, "Failed to start IPC server");
+            std::process::exit(1);
+        }
+    });
+
+    let _ = gtk::init();
+
+    gtk::style_context_add_provider_for_display(
+        &gdk::Display::default().expect("Failed to get default display"),
+        &APP_LOCAL.with(|app| app.provider.clone()),
+        gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+    );
+
+    if let Some(settings) = gtk::Settings::default() {
+        let current_icon_theme = settings.property::<String>("gtk-icon-theme-name");
+        APP_LOCAL.with(|app| {
+            app.icon_theme.set_theme_name(Some(&current_icon_theme));
+        });
+    }
+
+    scss::bundle_apply_scss();
+    scss::watch_scss();
+
+    services::activate_all().await;
+    windows::listen_for_ipc_messages();
+    bar::listen_for_ipc_messages();
+
+    let application = Application::new(
+        Some("sn.inpr.gray_meadows_shell"),
+        Default::default(),
+    );
+
+    application.connect_activate(activate);
+    application
+}
+
+fn main() {
     let args: Vec<String> = std::env::args().collect();
 
     // If no arguments are provided, assume that the user wants to run the shell.
     // Otherwise, interpret the arguments as an IPC command.
-    if args.len() == 1 {
-        tracing_subscriber::fmt()
-            .with_line_number(true)
-            .with_env_filter(EnvFilter::from_default_env()
-                .add_directive(LevelFilter::INFO.into()))
-            .with_timer(ChronoLocal::new("%H:%M:%S%.3f".to_owned()))
-            .init();
-
-        // Ensure that another instance of gray-meadows-shell is not running.
-        // gray-meadows-shell can hold on to it's socket for a bit after exiting so we'll
-        // try multiple times, in case this is being restarted right after a SIGTERM
-        for i in 1..=5 {
-            if ipc::client::get_stream().is_ok() {
-                if i == 5 {
-                    error!("Looks like another instance of gray-meadows-shell is already running.");
-                    std::process::exit(1);
-                }
-
-                warn!("Socket is taken, waiting for it to be released... ({}{} attempt)",
-                    i,
-                    if i == 1 { "st" } else if i == 2 { "nd" } else if i == 3 { "rd" } else { "th" }
-                );
-                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-            }
-        }
-        
-        tokio::spawn(async {
-            if let Err(e) = ipc::server::start().await {
-                error!(%e, "Failed to start IPC server");
-                std::process::exit(1);
-            }
-        });
-
-        let _ = gtk::init();
-
-        gtk::style_context_add_provider_for_display(
-            &gdk::Display::default().expect("Failed to get default display"),
-            &APP_LOCAL.with(|app| app.provider.clone()),
-            gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
-        );
-
-        if let Some(settings) = gtk::Settings::default() {
-            let current_icon_theme = settings.property::<String>("gtk-icon-theme-name");
-            APP_LOCAL.with(|app| {
-                app.icon_theme.set_theme_name(Some(&current_icon_theme));
-            });
-        }
-
-        scss::bundle_apply_scss();
-        scss::watch_scss();
-
-        services::activate_all().await;
-        windows::listen_for_ipc_messages();
-        bar::listen_for_ipc_messages();
-
-        let application = Application::new(
-            Some("sn.inpr.gray_meadows_shell"),
-            Default::default(),
-        );
-
-        application.connect_activate(activate);
-        application.run();
-    } else {
+    if args.len() != 1 {
         let command = args[1..].join(" ");
 
         ipc::client::send_message(&command).map_or_else(
             |err| eprintln!("Failed to send IPC command: {}", err),
             |response| println!("{}", response)
         );
+
+        return;
     }
+
+    let runtime = tokio::runtime::Runtime::new().expect("Failed to start the tokio runtime");
+    let application = runtime.block_on(start_shell());
+
+    // The main loop must not run inside `block_on`: everything in there shares one cooperative
+    // budget of tokio operations (join handles, channels...) that is never replenished while
+    // `block_on` doesn't return. Once it ran out, every tokio future polled by the UI thread
+    // returns pending and wakes itself up again, so the UI thread spins and nothing completes.
+    // Entering the runtime still lets the UI thread spawn tasks.
+    let _guard = runtime.enter();
+    application.run();
 }
