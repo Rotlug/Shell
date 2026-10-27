@@ -1,8 +1,7 @@
 //! External monitors, which are adjusted over DDC/CI on their I2C bus.
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     fs, io,
-    os::fd::AsRawFd as _,
     path::PathBuf,
     sync::mpsc::{Receiver as CommandReceiver, RecvTimeoutError},
     thread,
@@ -10,7 +9,7 @@ use std::{
 };
 
 use ddc::{Ddc, Edid as _};
-use ddc_i2c::{I2cDeviceDdc, I2cDeviceEnumerator};
+use ddc_i2c::{I2cDeviceDdc, from_i2c_device};
 use tokio::sync::mpsc::Sender;
 
 use crate::{
@@ -23,9 +22,12 @@ use crate::{
 
 const DRM_PATH: &str = "/sys/class/drm";
 const ID_PREFIX: &str = "ddc:";
-/// Looking for monitors means talking to all of them, which is slow. Monitors don't get
-/// connected that often, and this is also how often they are asked for their brightness.
-const SCAN_INTERVAL: Duration = Duration::from_secs(10);
+/// How often it is checked whether monitors were connected or disconnected. That is only
+/// looking at what the kernel says about the connectors, talking to monitors is slow.
+const POLL_INTERVAL: Duration = Duration::from_secs(2);
+/// How often a monitor that is not answering is asked for its brightness, before concluding
+/// that it does not do DDC/CI
+const MAX_ATTEMPTS: u32 = 5;
 /// The VCP feature code of the brightness (luminance) of a monitor
 const BRIGHTNESS: u8 = 0x10;
 /// Internal panels have a backlight to adjust, that is a lot quicker and doesn't depend on the panel
@@ -33,6 +35,8 @@ const INTERNAL_CONNECTORS: [&str; 3] = ["eDP", "LVDS", "DSI"];
 
 struct Display {
     ddc: I2cDeviceDdc,
+    /// The number of the I2C bus the monitor is on
+    bus: u32,
     max: u16,
     current: u16,
 }
@@ -76,16 +80,21 @@ fn connectors_by_bus() -> HashMap<u32, Connector> {
         .collect()
 }
 
-/// Which `/dev/i2c-N` a handle is for
-fn bus_number(ddc: &I2cDeviceDdc) -> Option<u32> {
-    let fd = ddc.inner_ref().inner_ref().as_raw_fd();
-    let path = fs::read_link(format!("/proc/self/fd/{fd}")).ok()?;
-
-    path.file_name()?.to_str()?.strip_prefix("i2c-")?.parse().ok()
-}
-
 fn is_internal(connector: &str) -> bool {
     INTERNAL_CONNECTORS.iter().any(|prefix| connector.starts_with(prefix))
+}
+
+/// The external monitors that are plugged in, by the number of the I2C bus they are on. This
+/// is all there is to look at: the other buses are not for monitors, and talking to them is
+/// pointless at best.
+fn connected_externals() -> HashMap<u32, Connector> {
+    connectors_by_bus()
+        .into_iter()
+        .filter(|(_, connector)| {
+            !is_internal(&connector.name)
+                && fs::read_to_string(connector.path.join("status")).is_ok_and(|status| status.trim() == "connected")
+        })
+        .collect()
 }
 
 fn read_edid(connector: Option<&Connector>, ddc: &mut I2cDeviceDdc) -> Option<Edid> {
@@ -112,66 +121,62 @@ pub fn spawn(rx: CommandReceiver<Command>, event_tx: Sender<Event>) -> io::Resul
 #[derive(Default)]
 struct Scanner {
     displays: HashMap<MonitorId, Display>,
-    /// Monitors that don't do DDC/CI, that aren't asked again for as long as they stay connected
-    unsupported: HashSet<MonitorId>,
+    /// How often reading the brightness of a monitor failed, by the bus it is on. It may just
+    /// not be ready yet after being connected, but not answering forever means it does not do
+    /// DDC/CI. Forgotten once the monitor is disconnected.
+    failures: HashMap<u32, u32>,
 }
 
 impl Scanner {
-    /// Looks for monitors that appeared or disappeared, and for brightness that changed.
+    /// Looks for monitors that were connected or disconnected. Only the monitors that are
+    /// plugged in are talked to, and only once: their brightness is not polled, it is read when
+    /// they appear and kept up to date by the changes made here.
     /// Returns `false` once nobody is listening.
     fn scan(&mut self, event_tx: &Sender<Event>) -> bool {
-        let connectors = connectors_by_bus();
-        let mut seen = HashSet::new();
+        let connected = connected_externals();
 
-        // Not being able to enumerate means that there is nothing to find
-        let enumerator = I2cDeviceEnumerator::new().into_iter().flatten();
+        let gone: Vec<MonitorId> = self
+            .displays
+            .iter()
+            .filter(|(_, display)| !connected.contains_key(&display.bus))
+            .map(|(id, _)| id.clone())
+            .collect();
+        for id in gone {
+            self.displays.remove(&id);
 
-        for mut ddc in enumerator {
-            let Some(bus) = bus_number(&ddc) else {
-                continue;
-            };
-
-            let connector = connectors.get(&bus);
-            if connector.is_some_and(|connector| is_internal(&connector.name)) {
-                continue;
+            if event_tx.blocking_send(Event::Removed(id)).is_err() {
+                return false;
             }
+        }
 
+        self.failures.retain(|bus, _| connected.contains_key(bus));
+
+        for (bus, connector) in &connected {
             let id = MonitorId(format!("{ID_PREFIX}i2c-{bus}"));
-            seen.insert(id.clone());
 
-            if let Some(display) = self.displays.get_mut(&id) {
-                if let Some((current, _)) = Display::read(&mut display.ddc)
-                    && current != display.current
-                {
-                    display.current = current;
-
-                    if event_tx.blocking_send(Event::Brightness(id, display.fraction())).is_err() {
-                        return false;
-                    }
-                }
-
+            if self.displays.contains_key(&id) || self.failures.get(bus).is_some_and(|&n| n >= MAX_ATTEMPTS) {
                 continue;
             }
 
-            if self.unsupported.contains(&id) {
-                continue;
-            }
-
-            let Some((current, max)) = Display::read(&mut ddc) else {
-                self.unsupported.insert(id);
+            let opened = from_i2c_device(format!("/dev/i2c-{bus}")).ok();
+            let Some((mut ddc, (current, max))) = opened.and_then(|mut ddc| {
+                let brightness = Display::read(&mut ddc)?;
+                Some((ddc, brightness))
+            }) else {
+                *self.failures.entry(*bus).or_default() += 1;
                 continue;
             };
 
-            let name = read_edid(connector, &mut ddc).map_or_else(
+            let name = read_edid(Some(connector), &mut ddc).map_or_else(
                 || "External display".to_string(),
                 |edid| edid.display_name(),
             );
-            let display = Display { ddc, max, current };
+            let display = Display { ddc, bus: *bus, max, current };
 
             let monitor = Monitor {
                 id: id.clone(),
                 kind: MonitorKind::External,
-                connector: connector.map(|connector| connector.name.clone()),
+                connector: Some(connector.name.clone()),
                 name,
                 brightness: display.fraction(),
             };
@@ -182,17 +187,6 @@ impl Scanner {
                 return false;
             }
         }
-
-        let gone: Vec<MonitorId> = self.displays.keys().filter(|id| !seen.contains(id)).cloned().collect();
-        for id in gone {
-            self.displays.remove(&id);
-
-            if event_tx.blocking_send(Event::Removed(id)).is_err() {
-                return false;
-            }
-        }
-
-        self.unsupported.retain(|id| seen.contains(id));
 
         true
     }
@@ -225,7 +219,7 @@ fn run(rx: &CommandReceiver<Command>, event_tx: &Sender<Event>) {
                 return;
             }
 
-            next_scan = Instant::now() + SCAN_INTERVAL;
+            next_scan = Instant::now() + POLL_INTERVAL;
         }
 
         match rx.recv_timeout(next_scan.saturating_duration_since(Instant::now())) {
