@@ -2,7 +2,6 @@ use gtk::prelude::*;
 use futures_signals::signal::SignalExt as _;
 
 use crate::services::sysstats::SYS_STATS;
-use crate::services::sysstats::sensors::SENSORS;
 use crate::utils::unit::bytes_to_gib;
 use super::super::CompactStatRow;
 use super::super::super::SWAP_SHOW_THRESHOLD;
@@ -34,7 +33,7 @@ pub fn overview() -> gtk::Box {
         })
     });
 
-    glib::spawn_future_local(signal!(SENSORS.cpu_temp, (cpu_temp) {
+    glib::spawn_future_local(signal!(SYS_STATS.cpu_temperature, (cpu_temp) {
         cpu_stat_row.set_secondary_value(&format!("{:.1}°C", cpu_temp));
     }));
 

@@ -33,7 +33,6 @@
             freetype
 
             pipewire # libpipewire/libspa, for the volume_mixer crate
-            lm_sensors # `sensors` crate (CPU temps in the sysstats bar module)
             udev # libudev, for the brightness crate (DDC/CI monitor enumeration)
           ];
         in
@@ -66,7 +65,7 @@
             # requirement. wrapGAppsHook4 already wraps the binary; this
             # appends to that same wrapper instead of adding a second,
             # conflicting one.
-            # nvml-wrapper (sysstats GPU usage) dlopen()s libnvidia-ml.so at
+            # system_stats' nvidia feature (GPU memory) dlopen()s libnvidia-ml.so at
             # runtime rather than linking it - it's the proprietary driver's
             # library, which on NixOS only ever lives under
             # /run/opengl-driver/lib (not a normal ld.so search path), so

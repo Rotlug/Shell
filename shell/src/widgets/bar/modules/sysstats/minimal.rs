@@ -3,7 +3,6 @@ use futures_signals::signal::{Mutable, SignalExt as _};
 use gtk::prelude::*;
 
 use crate::services::sysstats::{MemoryInfo, SYS_STATS};
-use crate::services::sysstats::sensors::SENSORS;
 use crate::utils::unit::bytes_to_gib;
 use super::SWAP_SHOW_THRESHOLD;
 
@@ -122,7 +121,7 @@ pub fn minimal() -> gtk::Box {
         cpu_usage_label.set_label(&format_percentage(global_cpu_usage));
     }));
 
-    glib::spawn_future_local(signal!(SENSORS.cpu_temp, (cpu_temp) {
+    glib::spawn_future_local(signal!(SYS_STATS.cpu_temperature, (cpu_temp) {
         cpu_temperature_label.set_label(&get_temperature_label_text(cpu_temp));
     }));
 
