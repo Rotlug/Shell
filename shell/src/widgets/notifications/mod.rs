@@ -1,7 +1,7 @@
 pub mod notification;
 
 use std::rc::Rc;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::time::Duration;
 use gtk::prelude::*;
 use cairo::{Region, RectangleInt};
@@ -20,6 +20,47 @@ pub struct NotificationsWindow {
     pub widgets: Rc<RefCell<Vec<NotificationWidget>>>,
     pub window: gtk::ApplicationWindow,
     pub container: gtk::Box,
+    /// Whether the input region is being kept up to date, see `start_input_region_updates`
+    input_region_updates: Rc<Cell<bool>>,
+}
+
+/// Updates the input region every frame to match the size of the window's child, for as long as
+/// there are notifications. A tick callback keeps the frame clock running, and every update
+/// commits the surface of this window (which covers the whole monitor), so there must not be
+/// one while there is nothing to follow.
+fn start_input_region_updates(window: &gtk::ApplicationWindow, running: &Rc<Cell<bool>>) {
+    if running.replace(true) {
+        return;
+    }
+
+    window.add_tick_callback(clone!(
+        #[strong] running,
+        move |window, _| {
+            let Some(child) = window.child() else {
+                running.set(false);
+                return glib::ControlFlow::Break;
+            };
+
+            let allocation = child.allocation();
+            let region = Region::create_rectangle(&RectangleInt::new(
+                allocation.x(),
+                allocation.y(),
+                allocation.width(),
+                allocation.height(),
+            ));
+
+            if let Some(surface) = window.native().and_then(|n| n.surface()) {
+                surface.set_input_region(&region);
+            }
+
+            if child.first_child().is_some() {
+                glib::ControlFlow::Continue
+            } else {
+                running.set(false);
+                glib::ControlFlow::Break
+            }
+        }
+    ));
 }
 
 impl NotificationsWindow {
@@ -48,34 +89,21 @@ impl NotificationsWindow {
             }
         }
 
-        // Update the input region every frame to match the size of the window's child
-        window.add_tick_callback(move |window, _| {
-            if let Some(child) = window.child() {
-                let allocation = child.allocation();
-                let region = Region::create_rectangle(&RectangleInt::new(
-                    allocation.x(),
-                    allocation.y(),
-                    allocation.width(),
-                    allocation.height(),
-                ));
-
-                if let Some(surface) = window.native().and_then(|n| n.surface()) {
-                    surface.set_input_region(&region);
-                }
-            }
-
-            glib::ControlFlow::Continue
-        });
+        let input_region_updates = Rc::new(Cell::new(false));
+        // Sets the (empty) input region of the window as it is now, so that it doesn't catch input
+        start_input_region_updates(&window, &input_region_updates);
 
         NotificationsWindow {
             widgets: Rc::new(RefCell::new(Vec::new())),
             window,
             container,
+            input_region_updates,
         }
     }
 
     pub fn add_widget(&self, widget: &NotificationWidget) {
         self.widgets.borrow_mut().push(widget.clone());
+        start_input_region_updates(&self.window, &self.input_region_updates);
 
         // clamp to 300px
         let clamp = libadwaita::Clamp::new();
