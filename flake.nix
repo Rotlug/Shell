@@ -16,7 +16,7 @@
         let
           # Native deps for the gtk4/libadwaita/relm4 UI. Audio (src/services/
           # wireplumber.rs) talks to PipeWire directly via the pure-Rust
-          # `pwmixer` crate, so no WirePlumber/astal C headers are needed.
+          # `volume_mixer` crate, so no WirePlumber/astal C headers are needed.
           nativeLibs = with pkgs; [
             glib
             gtk4
@@ -33,8 +33,9 @@
             fontconfig
             freetype
 
-            pipewire # libpipewire/libspa, for the pwmixer crate
+            pipewire # libpipewire/libspa, for the volume_mixer crate
             lm_sensors # `sensors` crate (CPU temps in the sysstats bar module)
+            udev # libudev, for the brightness crate (DDC/CI monitor enumeration)
           ];
         in
         {
@@ -43,15 +44,9 @@
             version = "0.1.0";
             src = ./.;
 
-            cargoLock = {
-              lockFile = ./Cargo.lock;
-              # pwmixer is consumed straight from its upstream repo (a
-              # workspace member, not the repo root) rather than vendored,
-              # so Nix needs an explicit hash for that git source.
-              outputHashes = {
-                "pwmixer-0.1.0" = "sha256-l3Z05EwBiX8jnToKk9cQX6qs4RBW+177oe+7iwirE1g=";
-              };
-            };
+            # The libraries are workspace members under crates/, so there
+            # are no git dependencies to hash.
+            cargoLock.lockFile = ./Cargo.lock;
 
             nativeBuildInputs = with pkgs; [
               pkg-config

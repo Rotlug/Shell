@@ -169,16 +169,52 @@ fn generate_base16_user_scss(base16: &[String; 16]) -> String {
     )
 }
 
+/// Reads the font family from the `GMS_FONT` environment variable, if set
+/// to something non-empty.
+fn font_from_env() -> Option<String> {
+    std::env::var("GMS_FONT").ok().map(|font| font.trim().to_owned()).filter(|font| !font.is_empty())
+}
+
+/// Replaces every `$font-family-*` variable in `user_scss` with `font`, so a
+/// single `GMS_FONT` applies to all of the shell's text sizes.
+fn override_fonts(user_scss: &str, font: &str) -> String {
+    let font = font.replace('\\', "\\\\").replace('"', "\\\"");
+
+    user_scss.lines().map(|line| {
+        line.strip_prefix("$font-family-")
+            .and_then(|rest| rest.split_once(':'))
+            .map_or_else(|| line.to_owned(), |(name, _)| format!("$font-family-{name}: \"{font}\";"))
+    }).collect::<Vec<_>>().join("\n") + "\n"
+}
+
 /// Overwrites `_user.scss` with colors derived from `GMS_BASE16_*`
-/// environment variables, if a full palette is set. Returns `true` when it
-/// did so, so the caller can skip writing the bundled (non-base16) default
-/// in that case.
-fn write_base16_user_styles(styles_path: &Path) -> bool {
-    let Some(base16) = base16_from_env() else { return false };
+/// environment variables (if a full palette is set) and/or the font from
+/// `GMS_FONT`. When only the font is set, the rest comes from the bundled
+/// default. Returns `true` when it wrote the file, so the caller can skip
+/// writing the bundled default in that case.
+fn write_env_user_styles(styles_path: &Path) -> bool {
+    let base16 = base16_from_env();
+    let font = font_from_env();
+
+    if base16.is_none() && font.is_none() {
+        return false;
+    }
+
+    let mut user_scss = base16.as_ref().map_or_else(
+        || DEFAULT_STYLES.iter()
+            .find(|(rel_path, _)| *rel_path == "_user.scss")
+            .map_or_else(String::new, |(_, content)| (*content).to_owned()),
+        generate_base16_user_scss,
+    );
+
+    if let Some(font) = &font {
+        user_scss = override_fonts(&user_scss, font);
+    }
+
     let abs_path = styles_path.join("_user.scss");
 
-    if let Err(error) = std::fs::write(&abs_path, generate_base16_user_scss(&base16)) {
-        error!(%error, path = %abs_path.display(), "Failed to write base16-derived user styles");
+    if let Err(error) = std::fs::write(&abs_path, user_scss) {
+        error!(%error, path = %abs_path.display(), "Failed to write environment-derived user styles");
     }
 
     true
@@ -189,10 +225,10 @@ pub fn write_default_styles() {
     let styles_path = Path::new(&styles_dir);
     let _ = std::fs::create_dir_all(styles_path);
 
-    let wrote_base16_user_styles = write_base16_user_styles(styles_path);
+    let wrote_env_user_styles = write_env_user_styles(styles_path);
 
     for (rel_path, content) in DEFAULT_STYLES {
-        if wrote_base16_user_styles && *rel_path == "_user.scss" {
+        if wrote_env_user_styles && *rel_path == "_user.scss" {
             continue;
         }
 

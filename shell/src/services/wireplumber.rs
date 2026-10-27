@@ -1,11 +1,11 @@
-//! Audio mixing, backed by the `pwmixer` crate (https://github.com/Rotlug/shell)
+//! Audio mixing, backed by the `volume_mixer` crate
 //! instead of the old astal-wireplumber C++ FFI bridge - talks to PipeWire
 //! directly, no WirePlumber/astal headers needed at build time.
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock, OnceLock, RwLock};
 use async_broadcast::Receiver;
-use pwmixer::node::{NodeKind, NodeProps};
-use pwmixer::{Command, Event as PwEvent, Mixer, ObjectId};
+use volume_mixer::node::{NodeKind, NodeProps};
+use volume_mixer::{Command, Event as PwEvent, Mixer, ObjectId};
 use tokio::sync::mpsc;
 
 use crate::utils::broadcast::BroadcastChannel;
@@ -139,7 +139,7 @@ pub fn set_default(id: i32) {
     });
 }
 
-/// Mirrors pwmixer's own `Display for NodeProps` priority: nick > app name >
+/// Mirrors volume_mixer's own `Display for NodeProps` priority: nick > app name >
 /// description > raw node name, so there's always something sensible to show.
 fn display_name(props: &NodeProps) -> String {
     props.nick.clone()

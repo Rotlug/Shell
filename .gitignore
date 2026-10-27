@@ -1,7 +1,7 @@
 /.cache
 /target
-/styles/output.css
-/styles/output.css.map
+/shell/styles/output.css
+/shell/styles/output.css.map
 /compile_commands.json
 /perf.data
 /flamegraph.svg
