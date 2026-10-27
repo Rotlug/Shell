@@ -1,10 +1,11 @@
-use std::{cell::RefCell, f64, rc::Rc};
+use std::{cell::{Cell, RefCell}, f64, rc::Rc};
 use gtk::prelude::*;
 
 use crate::scss;
 use crate::utils::gesture;
 use crate::services::mpris;
 use super::extended::SEEK_STEP_MICROSECONDS;
+use super::super::super::base::BarModule;
 
 static WAVE_AMPLITUDE_FACTOR: f64 = 10.0;
 static WAVE_SPEED: f64 = 3.0;
@@ -68,13 +69,46 @@ impl ProgressBar {
             }
         ));
         
-        drawing_area.add_tick_callback(move |drawing_area, clock| {
-            if drawing_area.is_visible() {
-                *frametime.borrow_mut() = clock.frame_time() as f64 / 1_000_000.0;
-                drawing_area.queue_draw();
+        // The wave is only animated while the module is expanded. A tick callback keeps the
+        // frame clock (and the redrawing of the whole bar) running for as long as it exists,
+        // even when what it draws can't be seen, so it is only there when it is needed.
+        let tick: Rc<RefCell<Option<gtk::TickCallbackId>>> = Rc::new(RefCell::new(None));
+        let set_animated = Rc::new(clone!(
+            #[weak] drawing_area,
+            #[strong] tick,
+            move |animated: bool| {
+                let mut tick = tick.borrow_mut();
+
+                if animated && tick.is_none() {
+                    *tick = Some(drawing_area.add_tick_callback(clone!(
+                        #[strong] frametime,
+                        move |drawing_area, clock| {
+                            *frametime.borrow_mut() = clock.frame_time() as f64 / 1_000_000.0;
+                            drawing_area.queue_draw();
+                            glib::ControlFlow::Continue
+                        }
+                    )));
+                } else if !animated && let Some(id) = tick.take() {
+                    id.remove();
+                }
             }
-            
-            glib::ControlFlow::Continue
+        ));
+
+        let connected = Cell::new(false);
+        drawing_area.connect_realize(move |drawing_area| {
+            if connected.replace(true) {
+                return;
+            }
+
+            let Some(module) = drawing_area.ancestor(BarModule::static_type()).and_downcast::<BarModule>() else {
+                return;
+            };
+
+            set_animated(module.expanded());
+            module.connect_expanded_notify(clone!(
+                #[strong] set_animated,
+                move |module| set_animated(module.expanded())
+            ));
         });
 
         let primary_held = Rc::new(RefCell::new(false));
