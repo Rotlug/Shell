@@ -315,6 +315,7 @@ mod imp {
             }
 
             self.expanded.set(expanded);
+            self.obj().notify_expanded();
             
             let obj = self.obj();
             let start = self.progress.get();
