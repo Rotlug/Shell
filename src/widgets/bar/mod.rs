@@ -8,6 +8,7 @@ mod modules {
     pub mod tray;
     pub mod volume;
     pub mod network;
+    pub mod power_profile;
 }
 
 use std::rc::Rc;
@@ -91,6 +92,7 @@ impl BarWindow {
                 set_valign: gtk::Align::Start,
 
                 append: &modules::tray::new(),
+                append: &modules::power_profile::new(),
                 append: &modules::network::new(),
                 append: &modules::volume::new(),
             },
