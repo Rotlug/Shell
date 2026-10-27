@@ -226,7 +226,7 @@ mod imp {
                         let minimal_blur = progress * super::BLUR_FACTOR_PX as f64;
                         let expanded_blur = (1.0 - progress) * super::BLUR_FACTOR_PX as f64;
     
-                        if minimal_opacity > 0.0 || minimal_blur > 0.0 {
+                        if minimal_opacity > 0.0 {
                             let minimal_x = (width - minimal_nat.0) as f32 / 2.0;
                             snapshot.save();
                             snapshot.push_clip(&graphene::Rect::new(minimal_x, 0.0, expected_width, expected_height));
@@ -240,7 +240,7 @@ mod imp {
                             snapshot.restore();
                         }
     
-                        if expanded_opacity > 0.0 || expanded_blur > 0.0 {
+                        if expanded_opacity > 0.0 {
                             snapshot.push_clip(&graphene::Rect::new(0.0, 0.0, expected_width, expected_height));
                             snapshot.push_opacity(expanded_opacity);
                             snapshot.push_blur(expanded_blur);
