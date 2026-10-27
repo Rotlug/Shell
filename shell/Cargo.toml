@@ -10,8 +10,6 @@ async-channel = "2.5.0"
 cairo-rs = "0.21.5"
 chrono = "0.4.45"
 dbus = "0.9.12"
-dbus-crossroads = "0.5.3"
-dbus-tokio = "0.7.6"
 futures-signals = "0.3.34"
 gdk = { version = "0.10.3", package = "gdk4" }
 gio = "0.21.5"
@@ -26,6 +24,8 @@ image = "0.25.10"
 libadwaita = { version = "0.8.1", features = ["v1_4", "v1_7"] }
 libc = "0.2.189"
 mpris = { path = "../crates/mpris" }
+notif_daemon = { path = "../crates/notif_daemon" }
+systray = { path = "../crates/systray" }
 notify = "8.2.0"
 num-traits = "0.2.19"
 nvml-wrapper = "0.11.0"

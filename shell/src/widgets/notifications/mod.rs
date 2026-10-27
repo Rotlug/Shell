@@ -8,7 +8,7 @@ use cairo::{Region, RectangleInt};
 use gtk4_layer_shell::{Edge, Layer, LayerShell as _};
 
 use crate::{APP, APP_LOCAL};
-use crate::services::notifications::{self, wrapper::NotificationHint};
+use crate::services::notifications::{self, Urgency};
 use crate::widgets::notifications::notification::NotificationDismissAnimation;
 use self::notification::NotificationWidget;
 
@@ -86,9 +86,7 @@ impl NotificationsWindow {
 
         self.container.prepend(&clamp);
 
-        let timeout = if widget.notification.borrow().hints.iter().any(|hint| {
-            matches!(hint, NotificationHint::Urgency(u) if *u >= 2)
-        }) {
+        let timeout = if widget.notification.borrow().urgency == Urgency::Urgent {
             CRITICAL_NOTIF_DISPLAY_TIMEOUT
         } else {
             NOTIF_DISPLAY_TIMEOUT
@@ -104,7 +102,7 @@ impl NotificationsWindow {
 }
 
 pub fn listen_for_notifications() {
-    use notifications::bus::BusEvent;
+    use notifications::BusEvent;
     let mut receiver = notifications::subscribe();
 
     glib::spawn_future_local(async move {

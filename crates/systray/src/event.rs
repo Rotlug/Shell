@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::{item::Item, menu::MenuItem};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Event {
     ItemAdded(String, Arc<Item>),
     ItemRemoved(String),

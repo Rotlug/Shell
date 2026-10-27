@@ -118,6 +118,13 @@ impl Manager {
         Ok(())
     }
 
+    /// Returns all notifications that haven't been closed yet, oldest first.
+    pub async fn get_all(&self) -> Vec<Notification> {
+        let mut all: Vec<Notification> = self.notifications.lock().await.values().cloned().collect();
+        all.sort_by_key(|n| n.id);
+        all
+    }
+
     /// Returns a `Notification` given its id, or `None` if none is found.
     pub async fn get_by_id(&self, id: u32) -> Option<Notification> {
         self.notifications.lock().await.get(&id).cloned()

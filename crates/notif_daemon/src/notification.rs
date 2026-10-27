@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use zbus::zvariant::Type;
 
 /* Urgency */
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum Urgency {
     Low,
     #[default]

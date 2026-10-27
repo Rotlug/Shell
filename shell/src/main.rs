@@ -12,7 +12,6 @@ mod ipc;
 mod services;
 mod widgets;
 mod utils;
-mod dbus;
 mod scss;
 mod pixbuf;
 mod session;

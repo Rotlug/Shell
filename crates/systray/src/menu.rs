@@ -120,26 +120,66 @@ impl Drop for Menu {
 }
 
 /// Represents an item in the `Menu`.
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct MenuItem {
     pub id: i32,
     pub contents: MenuItemContents,
+    /// Disabled items are shown, but can't be activated
+    pub enabled: bool,
+    /// The items of the submenu that opens from this item, if it has one
+    pub children: Vec<MenuItem>,
 }
 
-// Prase the `OwnedValue` into a menu item
-impl TryFrom<&OwnedValue> for MenuItem {
-    type Error = crate::Error;
+/// Menu labels use `_` to mark the mnemonic of the next letter, and `__` for an actual `_`
+fn strip_mnemonics(label: &str) -> String {
+    let mut stripped = String::with_capacity(label.len());
+    let mut chars = label.chars().peekable();
 
-    fn try_from(value: &OwnedValue) -> Result<Self, Self::Error> {
-        let structure = value.downcast_ref::<&Structure>()?;
+    while let Some(c) = chars.next() {
+        if c == '_' {
+            if chars.peek() == Some(&'_') {
+                chars.next();
+                stripped.push('_');
+            }
+        } else {
+            stripped.push(c);
+        }
+    }
+
+    stripped
+}
+
+impl MenuItem {
+    /// Parses an `(ia{sv}av)` structure, and (recursively) its children. `None` for items that
+    /// shouldn't be displayed.
+    fn from_structure(structure: &Structure, original: &OwnedValue) -> Result<Option<Self>, crate::Error> {
         let mut fields = structure.fields().iter();
-        let mut menu_item = Self::default();
+        let mut menu_item = Self {
+            enabled: true,
+            ..Self::default()
+        };
 
         if let Some(Value::I32(id)) = fields.next() {
             menu_item.id = *id;
         }
 
         if let Some(Value::Dict(dict)) = fields.next() {
+            let visible = dict
+                .get::<&str, bool>(&"visible")
+                .ok()
+                .flatten()
+                .unwrap_or(true);
+
+            if !visible {
+                return Ok(None);
+            }
+
+            menu_item.enabled = dict
+                .get::<&str, bool>(&"enabled")
+                .ok()
+                .flatten()
+                .unwrap_or(true);
+
             let menu_type = dict
                 .get::<&str, &str>(&"type")
                 .ok()
@@ -148,7 +188,7 @@ impl TryFrom<&OwnedValue> for MenuItem {
 
             let label = dict
                 .get::<&str, &str>(&"label")?
-                .map(|label| label.replace('_', ""));
+                .map(strip_mnemonics);
 
             let toggle_state = dict
                 .get::<&str, i32>(&"toggle-state")
@@ -163,21 +203,48 @@ impl TryFrom<&OwnedValue> for MenuItem {
                 .flatten()
                 .unwrap_or_default();
 
-            menu_item.contents = match (menu_type, toggle_type, label.clone()) {
+            menu_item.contents = match (menu_type, toggle_type, label) {
                 ("separator", _, _) => MenuItemContents::Separator,
                 (_, "checkmark", Some(label)) => {
                     MenuItemContents::CheckboxButton(label, toggle_state)
                 }
                 (_, "radio", Some(label)) => MenuItemContents::RadioButton(label, toggle_state),
                 (_, _, Some(label)) => MenuItemContents::Label(label),
-                _ => {
-                    dbg!(menu_type, toggle_type, label);
-                    return Err(crate::Error::MenuItemParse(value.clone()));
-                }
+                _ => return Err(crate::Error::MenuItemParse(original.clone())),
             };
         }
 
-        Ok(menu_item)
+        // The children are an array of variants, each holding another one of these structures
+        if let Some(Value::Array(children)) = fields.next() {
+            for child in children.iter() {
+                let mut child = child;
+                while let Value::Value(inner) = child {
+                    child = inner;
+                }
+
+                // Same as for the menu as a whole: one entry we can't read is just left out
+                if let Value::Structure(child) = child
+                    && let Ok(Some(child)) = Self::from_structure(child, original)
+                {
+                    menu_item.children.push(child);
+                }
+            }
+        }
+
+        Ok(Some(menu_item))
+    }
+}
+
+// Prase the `OwnedValue` into a menu item
+impl TryFrom<&OwnedValue> for MenuItem {
+    type Error = crate::Error;
+
+    fn try_from(value: &OwnedValue) -> Result<Self, Self::Error> {
+        let structure = value.downcast_ref::<&Structure>()?;
+
+        // An invisible item has nothing to show, so it doesn't produce an item
+        Self::from_structure(structure, value)?
+            .ok_or_else(|| crate::Error::MenuItemParse(value.clone()))
     }
 }
 
@@ -186,7 +253,7 @@ impl TryFrom<&OwnedValue> for MenuItem {
 /// * Text with radio button
 /// * Text with checkbox
 /// * Visual Separator
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MenuItemContents {
     Label(String),
     RadioButton(String, ToggleState),
@@ -201,7 +268,7 @@ impl Default for MenuItemContents {
 }
 
 /// Represents the current state of a radio button or checkbox
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum ToggleState {
     #[default]
     On,
@@ -216,5 +283,82 @@ impl From<i32> for ToggleState {
             1 => Self::On,
             _ => Self::NonInteractive,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use zbus::zvariant::{Array, Dict, StructureBuilder};
+
+    use super::*;
+
+    fn item(id: i32, props: &[(&str, Value<'static>)], children: Vec<Value<'static>>) -> Value<'static> {
+        let props: BTreeMap<String, Value> = props
+            .iter()
+            .map(|(k, v)| ((*k).to_string(), v.clone()))
+            .collect();
+
+        let children: Vec<Value> = children
+            .into_iter()
+            .map(|child| Value::Value(Box::new(child)))
+            .collect();
+
+        Value::Structure(
+            StructureBuilder::new()
+                .add_field(id)
+                .append_field(Value::Dict(Dict::from(props)))
+                .append_field(Value::Array(Array::from(children)))
+                .build()
+                .unwrap(),
+        )
+    }
+
+    fn parse(value: Value<'static>) -> crate::Result<MenuItem> {
+        MenuItem::try_from(&OwnedValue::try_from(value).unwrap())
+    }
+
+    #[test]
+    fn parses_nested_children() {
+        let menu = parse(item(
+            1,
+            &[("label", Value::from("_Recent"))],
+            vec![
+                item(2, &[("label", Value::from("one"))], vec![]),
+                item(3, &[("type", Value::from("separator"))], vec![]),
+                item(4, &[("label", Value::from("two")), ("enabled", Value::from(false))], vec![]),
+            ],
+        ))
+        .unwrap();
+
+        assert_eq!(menu.contents, MenuItemContents::Label("Recent".into()));
+        assert_eq!(menu.children.len(), 3);
+        assert_eq!(menu.children[0].id, 2);
+        assert_eq!(menu.children[1].contents, MenuItemContents::Separator);
+        assert!(!menu.children[2].enabled);
+    }
+
+    #[test]
+    fn leaves_out_invisible_and_unreadable_children() {
+        let menu = parse(item(
+            1,
+            &[("label", Value::from("Root"))],
+            vec![
+                item(2, &[("label", Value::from("hidden")), ("visible", Value::from(false))], vec![]),
+                item(3, &[], vec![]),
+                item(4, &[("label", Value::from("shown"))], vec![]),
+            ],
+        ))
+        .unwrap();
+
+        assert_eq!(menu.children.len(), 1);
+        assert_eq!(menu.children[0].id, 4);
+    }
+
+    #[test]
+    fn mnemonics() {
+        assert_eq!(strip_mnemonics("_File"), "File");
+        assert_eq!(strip_mnemonics("snake__case"), "snake_case");
     }
 }

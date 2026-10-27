@@ -16,9 +16,9 @@ pub async fn activate_all() {
     mpris::activate().await;
     sysstats::activate();
     compositor::activate();
-    tray::activate();
+    tray::activate().await;
     wireplumber::activate();
-    notifications::activate();
+    notifications::activate().await;
     //networkmanager::activate();
     networkmanager::status::activate();
     clipboard::activate();

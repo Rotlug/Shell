@@ -4,8 +4,8 @@ use std::rc::{Rc, Weak};
 use gtk::prelude::*;
 use relm4::RelmRemoveAllExt as _;
 
-use crate::services::notifications::close_notification_by_id;
-use crate::services::notifications::wrapper::{Notification, NotificationAction, NotificationCloseReason};
+use crate::services::notifications::{self, ClosingReason, Notification};
+use notif_daemon::notification::Action;
 use crate::utils::gesture;
 use crate::widgets::common::revealer::{AdwRevealer, AdwRevealerDirection, GEasing};
 
@@ -106,15 +106,15 @@ impl glib::clone::Upgrade for NotificationWidgetWeak {
 impl NotificationWidget {
     fn make_action_button(
         notification: &Notification,
-        action: &NotificationAction,
+        action: &Action,
     ) -> gtk::Button {
-        let button = gtk::Button::with_label(&action.localized_name);
+        let button = gtk::Button::with_label(&action.name);
         button.set_css_classes(&["notification-action-button"]);
         button.connect_clicked({
             let notification_id = notification.id;
-            let action_id = action.id.clone();
+            let action_key = action.key.clone();
             move |_| {
-                crate::services::notifications::invoke_notification_action(notification_id, &action_id);
+                tokio::spawn(notifications::invoke_notification_action(notification_id, action_key.clone()));
             }
         });
         
@@ -261,10 +261,10 @@ impl NotificationWidget {
                     };
 
                     me.destroy(Some(animation));
-                    let _ = close_notification_by_id(
+                    tokio::spawn(notifications::close_notification_by_id(
                         me.notification.borrow().id,
-                        NotificationCloseReason::Dismissed
-                    );
+                        ClosingReason::Dismissed
+                    ));
                 } else {
                     me.style_provider.load_from_data(DEFAULT_CSS);
                 }

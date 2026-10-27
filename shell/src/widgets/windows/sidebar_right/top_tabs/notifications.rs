@@ -2,8 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use gtk::prelude::*;
 
-use crate::services::notifications::{self, clear_notifications};
-use crate::services::notifications::bus::BusEvent;
+use crate::services::notifications::{self, clear_notifications, BusEvent};
 use crate::widgets::notifications::notification::{self, NotificationWidget};
 
 pub fn new() -> gtk::Box {
@@ -95,8 +94,7 @@ pub fn new() -> gtk::Box {
     glib::spawn_future_local(async move {
         while let Ok(event) = receiver.recv().await {
             let update_view = || {
-                let count = notifications::NOTIFICATIONS.get()
-                    .map_or(0, |notifications| notifications.read().unwrap().len());
+                let count = notifications::count();
 
                 header_counter.set_label(&format!("{} notification{}", count, if count == 1 { "" } else { "s" }));
                 notifications_empty_revealer.set_reveal_child(count < 1);

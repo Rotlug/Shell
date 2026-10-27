@@ -51,7 +51,7 @@ impl Daemon {
     /// Returns which features are supported by this daemon. full list at:
     /// <https://specifications.freedesktop.org/notification/latest/protocol.html#id-1.10.3.2.5>
     async fn get_capabilities(&self) -> fdo::Result<Vec<String>> {
-        Ok(["body", "body-markup", "actions"]
+        Ok(["body", "actions"]
             .map(str::to_string)
             .to_vec())
     }

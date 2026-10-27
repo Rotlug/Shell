@@ -104,14 +104,20 @@ impl Item {
     /// Finds the icon of this item. First trying to get a system icon, then falling back to a
     /// pixmap if available. If both options fail, returns `None`.
     pub async fn icon(&self, size: i32) -> Option<Icon> {
-        let system_icon = self.proxy.icon_name().await.ok();
-        if let Some(icon) = system_icon
-            && !icon.is_empty()
-        {
+        if let Some(icon) = self.icon_name().await {
             return Some(Icon::System(icon));
         }
 
-        // System icon not found, trying pixmap
+        self.icon_pixmap(size).await
+    }
+
+    /// The name of the item's icon in the system's icon theme, if it has one.
+    pub async fn icon_name(&self) -> Option<String> {
+        self.proxy.icon_name().await.ok().filter(|icon| !icon.is_empty())
+    }
+
+    /// The item's icon as an image, the closest one in size to `size` if it has several.
+    pub async fn icon_pixmap(&self, size: i32) -> Option<Icon> {
         let pixmap = self
             .proxy
             .icon_pixmap()
@@ -165,15 +171,15 @@ impl Item {
         })
     }
 
-    /// Primary action, usually left click.
-    pub async fn activate(&self) -> crate::Result<()> {
-        self.proxy.activate(0, 0).await?;
+    /// Primary action, usually left click. `x` and `y` are where the user clicked, on the screen.
+    pub async fn activate(&self, x: i32, y: i32) -> crate::Result<()> {
+        self.proxy.activate(x, y).await?;
         Ok(())
     }
 
     /// Secondary action, usually middle click.
-    pub async fn secondary_activate(&self) -> crate::Result<()> {
-        self.proxy.secondary_activate(0, 0).await?;
+    pub async fn secondary_activate(&self, x: i32, y: i32) -> crate::Result<()> {
+        self.proxy.secondary_activate(x, y).await?;
         Ok(())
     }
 
