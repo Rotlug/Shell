@@ -13,7 +13,7 @@ pub mod power_profiles;
 
 pub async fn activate_all() {
     date_time::activate();
-    mpris::activate();
+    mpris::activate().await;
     sysstats::activate();
     compositor::activate();
     tray::activate();

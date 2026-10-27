@@ -8,6 +8,9 @@ use tokio::{
 
 use crate::{Update, generated::player::PlayerProxy};
 
+/// How often the estimated position is reported.
+const UPDATE_INTERVAL: Duration = Duration::from_millis(500);
+
 #[derive(Debug)]
 pub struct Position {
     handle: JoinHandle<((), ())>,
@@ -25,7 +28,9 @@ impl Position {
         #[allow(clippy::cast_sign_loss)]
         let last_pos = Arc::new(Mutex::new(Duration::from_micros(pos as u64)));
         let last_updated = Arc::new(Mutex::new(Instant::now()));
-        let rate = Arc::new(Mutex::new(0.0));
+        // Position only advances while the player is actually playing
+        let playing = proxy.playback_status().await.is_ok_and(|status| status == "Playing");
+        let rate = Arc::new(Mutex::new(if playing { proxy.rate().await.unwrap_or(1.0) } else { 0.0 }));
 
         /* Task that listens to position updates */
         let pos_handle = last_pos.clone();
@@ -46,7 +51,7 @@ impl Position {
             }
         };
 
-        /* Task that sends position updates once a second */
+        /* Task that sends position updates every `UPDATE_INTERVAL` */
         let pos_handle = last_pos.clone();
         let updated_handle = last_updated;
         let rate_handle = rate;
@@ -60,7 +65,7 @@ impl Position {
                 *pos_handle.lock().await += elapsed.mul_f64(*rate_handle.lock().await);
 
                 let _ = tx.send(Update::Position(*pos_handle.lock().await));
-                time::sleep(Duration::from_secs(1)).await;
+                time::sleep(UPDATE_INTERVAL).await;
             }
         };
 

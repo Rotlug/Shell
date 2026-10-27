@@ -41,7 +41,7 @@ pub fn minimal() -> gtk::Box {
         paused_overlay = gtk::CenterBox {
             set_css_classes: &["bar-mpris-paused-overlay"],
             set_center_widget: Some(&gtk::Label::new(Some("▶"))),
-            set_visible: mpris::get_default_player().is_some_and(|p| p.playback_status != mpris::mpris_player::PlaybackStatus::Playing),
+            set_visible: mpris::get_default_player().is_some_and(|p| p.playback_status != mpris::PlaybackStatus::Playing),
         },
 
         album_overlay = gtk::Overlay {
@@ -77,7 +77,7 @@ pub fn minimal() -> gtk::Box {
             players_widget.show();
 
             current_track.set_label(&get_mpris_player_label_text());
-            paused_overlay.set_visible(default_player.playback_status != mpris::mpris_player::PlaybackStatus::Playing);
+            paused_overlay.set_visible(default_player.playback_status != mpris::PlaybackStatus::Playing);
 
             let make_blank_art = || {
                 // Create blank pixbuf filled with color #0D0D0D

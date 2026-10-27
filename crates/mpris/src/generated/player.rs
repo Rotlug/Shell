@@ -55,6 +55,14 @@ pub trait Player {
     #[zbus(property)]
     fn can_control(&self) -> zbus::Result<bool>;
 
+    /// CanGoNext property
+    #[zbus(property)]
+    fn can_go_next(&self) -> zbus::Result<bool>;
+
+    /// CanGoPrevious property
+    #[zbus(property)]
+    fn can_go_previous(&self) -> zbus::Result<bool>;
+
     /// CanPause property
     #[zbus(property)]
     fn can_pause(&self) -> zbus::Result<bool>;
@@ -107,9 +115,9 @@ pub trait Player {
 
     /// Shuffle property
     #[zbus(property)]
-    fn shuffle(&self) -> zbus::Result<f64>;
+    fn shuffle(&self) -> zbus::Result<bool>;
     #[zbus(property)]
-    fn set_shuffle(&self, value: f64) -> zbus::Result<()>;
+    fn set_shuffle(&self, value: bool) -> zbus::Result<()>;
 
     /// Volume property
     #[zbus(property)]

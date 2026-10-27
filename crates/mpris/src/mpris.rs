@@ -12,6 +12,7 @@ use crate::{PlaybackStatus, Update, player::Player};
 const MPRIS_BUS: &str = "org.mpris.MediaPlayer2";
 
 type Players = StreamMap<Arc<Player>, BroadcastStream<Update>>;
+type ActivePlayer = Arc<Mutex<Option<Arc<Player>>>>;
 
 /// This update enum is used to add/remove players from the `StreamMap`,
 /// Since the `handle` holds the mutex for the entire time (idk)
@@ -20,13 +21,15 @@ type Players = StreamMap<Arc<Player>, BroadcastStream<Update>>;
 /// accordingly.
 enum PlayerUpdate {
     Added(Arc<Player>),
-    Removed(Arc<Player>),
+    /// The name of the player that disappeared from the bus.
+    Removed(String),
 }
 
 /// The `Mpris` struct is used to receive updates from the MPRIS player that is
-/// currently playing.
+/// currently active: the one that is playing, or if none are, the one that
+/// was last active.
 pub struct Mpris {
-    active_player: Arc<Mutex<Option<Arc<Player>>>>,
+    active_player: ActivePlayer,
     handle: JoinHandle<()>,
     tx: broadcast::Sender<Update>,
     players_set: Arc<Mutex<HashSet<Arc<Player>>>>,
@@ -34,6 +37,9 @@ pub struct Mpris {
 
 impl Mpris {
     /// Construct a new MPRIS listener
+    ///
+    /// Updates sent before `subscribe` is called are lost, call `sync` after
+    /// subscribing to get the current state.
     ///
     /// # Errors
     /// Errors when the dbus connection fails
@@ -46,10 +52,13 @@ impl Mpris {
         /* Construct Players Map*/
         let mut players: Players = StreamMap::new();
         for name in Self::get_current_players(&connection).await? {
-            let player = Player::new(name, &connection).await?;
-            let sub = player.subscribe().into();
+            let Ok(player) = Player::new(name, &connection).await else {
+                continue;
+            };
+            let player = Arc::new(player);
 
-            players.insert(Arc::new(player), sub);
+            players.insert(player.clone(), player.subscribe().into());
+            players_set.lock().await.insert(player);
         }
 
         /* Start watching for updates */
@@ -58,51 +67,50 @@ impl Mpris {
         let mut rx = Self::watch_for_players(connection.clone()).await?;
         let players_set_handle = players_set.clone();
         let handle = tokio::spawn(async move {
+            Self::select_active_player(&players, &active_player_handle, &tx_handle).await;
+
             loop {
                 tokio::select! {
-                    Some(upd) = players.next() => {
-                        let player = upd.0;
-                        let Ok(upd) = upd.1 else {
+                    Some((player, upd)) = players.next() => {
+                        let Ok(upd) = upd else {
                             continue;
                         };
 
                         // Only send updates if the player is the one thats
-                        // currently playing
-                        let active = active_player_handle.lock().await.clone();
-                        if let Some(active) = active
-                            && player == active {
-                                let _ = tx_handle.send(upd.clone());
+                        // currently active
+                        let is_active = active_player_handle.lock().await.as_ref() == Some(&player);
+                        if is_active {
+                            let _ = tx_handle.send(upd.clone());
                         }
 
-                        let mut active = None;
-                        if let Update::PlaybackStatus(_) = &upd {
-                            /* Find active player */
-                            for player in players.keys() {
-                                if matches!(player.get_playback_status().await, Ok(PlaybackStatus::Playing)) {
-                                    active = Some(player);
-                                    let _ = tx_handle.send(upd);
-                                    let _ = player.sync().await;
-                                    break;
-                                }
-                            }
-
-                            *active_player_handle.lock().await = active.cloned();
+                        if let Update::PlaybackStatus(_) = upd {
+                            Self::select_active_player(&players, &active_player_handle, &tx_handle).await;
                         }
                     },
                     Some(upd) = rx.recv() => {
                         /* Add/Remove players from the map */
                         match upd {
                             PlayerUpdate::Added(p) => {
-                                let sub = p.subscribe();
-
-                                players.insert(p.clone(), sub.into());
-                                players_set_handle.lock().await.insert(p.clone());
+                                players.insert(p.clone(), p.subscribe().into());
+                                players_set_handle.lock().await.insert(p);
                             },
-                            PlayerUpdate::Removed(p) => {
-                                players.remove(&p);
-                                players_set_handle.lock().await.remove(&p);
+                            PlayerUpdate::Removed(name) => {
+                                let removed = {
+                                    let mut set = players_set_handle.lock().await;
+                                    let found = set.iter().find(|p| p.name == name).cloned();
+                                    if let Some(found) = &found {
+                                        set.remove(found);
+                                    }
+                                    found
+                                };
+
+                                if let Some(removed) = removed {
+                                    players.remove(&removed);
+                                }
                             }
                         }
+
+                        Self::select_active_player(&players, &active_player_handle, &tx_handle).await;
                     }
                 }
             }
@@ -114,6 +122,53 @@ impl Mpris {
             tx,
             players_set,
         })
+    }
+
+    /// Picks the active player, and notifies subscribers if it changed:
+    ///
+    /// 1. The current active player, if it is still playing.
+    /// 2. Otherwise, any player that is playing.
+    /// 3. Otherwise, the current active player, if it still exists.
+    /// 4. Otherwise, any player (or none, if there aren't any).
+    async fn select_active_player(
+        players: &Players,
+        active_player: &ActivePlayer,
+        tx: &broadcast::Sender<Update>,
+    ) {
+        let current = active_player.lock().await.clone();
+
+        // Sorted, so that the choice between equal candidates is stable
+        let mut candidates: Vec<&Arc<Player>> = players.keys().collect();
+        candidates.sort_by(|a, b| a.name.cmp(&b.name));
+
+        let mut playing = None;
+        for player in &candidates {
+            if matches!(player.get_playback_status().await, Ok(PlaybackStatus::Playing)) {
+                if current.as_ref() == Some(*player) {
+                    playing = Some(*player);
+                    break;
+                }
+
+                playing = playing.or(Some(*player));
+            }
+        }
+
+        let selected = playing
+            .or_else(|| candidates.iter().find(|p| current.as_ref() == Some(**p)).copied())
+            .or_else(|| candidates.first().copied())
+            .cloned();
+
+        if selected == current {
+            return;
+        }
+
+        *active_player.lock().await = selected.clone();
+        let _ = tx.send(Update::ActivePlayer(selected.as_ref().map(|p| p.name.clone())));
+
+        // The new active player's updates will be forwarded from now on
+        if let Some(selected) = selected {
+            let _ = selected.sync().await;
+        }
     }
 
     /// Finds all active players and returns their names
@@ -166,11 +221,9 @@ impl Mpris {
 
                     let _ = tx.send(PlayerUpdate::Added(Arc::new(player))).await;
                 } else if args.new_owner.is_none() && args.old_owner.is_some() {
-                    let Ok(player) = Player::new(name, &connection).await else {
-                        continue;
-                    };
-
-                    let _ = tx.send(PlayerUpdate::Removed(Arc::new(player))).await;
+                    // The player is already gone, so there is nothing to
+                    // construct (or query), only to forget about.
+                    let _ = tx.send(PlayerUpdate::Removed(name)).await;
                 }
             }
         });
@@ -184,7 +237,20 @@ impl Mpris {
         self.tx.subscribe()
     }
 
-    /// Returns the active player, or `None` if none is playing.
+    /// Re-sends the current state: the active player, followed by all of its
+    /// properties. Call this after `subscribe` to catch up with what happened
+    /// before subscribing.
+    pub async fn sync(&self) {
+        let Some(active) = self.get_active_player().await else {
+            let _ = self.tx.send(Update::ActivePlayer(None));
+            return;
+        };
+
+        let _ = self.tx.send(Update::ActivePlayer(Some(active.name.clone())));
+        let _ = active.sync().await;
+    }
+
+    /// Returns the active player, or `None` if there are no players.
     #[must_use]
     pub async fn get_active_player(&self) -> Option<Arc<Player>> {
         self.active_player.lock().await.clone()

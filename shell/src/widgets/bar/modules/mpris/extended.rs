@@ -1,6 +1,6 @@
 use gtk::prelude::*;
 
-use crate::services::mpris::{self, mpris_player::PlaybackStatus};
+use crate::services::mpris::{self, LoopStatus, PlaybackStatus};
 use crate::utils::gesture;
 use super::progress;
 
@@ -42,9 +42,7 @@ fn default_mpris_player() -> gtk::Box {
             set_label: "skip_previous",
             set_hexpand: false,
             connect_clicked => |_| {
-                mpris::with_default_player_mut(|player| if let Err(e) = player.previous() {
-                    error!(%e, "Failed to skip to previous track");
-                });
+                mpris::previous();
             }
         },
 
@@ -57,13 +55,7 @@ fn default_mpris_player() -> gtk::Box {
             },
             set_hexpand: false,
             connect_clicked => |_| {
-                let Some(player) = mpris::get_default_player() else {
-                    return warn!("No MPRIS player available to toggle play/pause");
-                };
-
-                if let Err(e) = player.play_pause() {
-                    error!(%e, "Failed to toggle play/pause");
-                }
+                mpris::play_pause();
             }
         },
 
@@ -72,9 +64,7 @@ fn default_mpris_player() -> gtk::Box {
             set_label: "skip_next",
             set_hexpand: false,
             connect_clicked => |_| {
-                mpris::with_default_player_mut(|player| if let Err(e) = player.next() {
-                    error!(%e, "Failed to skip to next track");
-                });
+                mpris::next();
             }
         },
 
@@ -88,14 +78,12 @@ fn default_mpris_player() -> gtk::Box {
                 };
 
                 let new_status = match player.loop_status {
-                    mpris::mpris_player::LoopStatus::None => mpris::mpris_player::LoopStatus::Playlist,
-                    mpris::mpris_player::LoopStatus::Playlist => mpris::mpris_player::LoopStatus::Track,
-                    mpris::mpris_player::LoopStatus::Track => mpris::mpris_player::LoopStatus::None,
+                    LoopStatus::None => LoopStatus::Playlist,
+                    LoopStatus::Playlist => LoopStatus::Track,
+                    LoopStatus::Track => LoopStatus::None,
                 };
                 
-                if let Err(e) = player.set_loop_status(new_status) {
-                    error!(%e, "Failed to set loop status");
-                }
+                mpris::set_loop_status(new_status);
             }
         },
 
@@ -110,9 +98,7 @@ fn default_mpris_player() -> gtk::Box {
 
                 let new_shuffle = !player.shuffle;
                 
-                if let Err(e) = player.set_shuffle(new_shuffle) {
-                    error!(%e, "Failed to set shuffle");
-                }
+                mpris::set_shuffle(new_shuffle);
             }
         },
 
@@ -218,19 +204,13 @@ fn default_mpris_player() -> gtk::Box {
     background.style_context().add_provider(&background_style_provider, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
 
     progress.add_controller(gesture::on_vertical_scroll(|delta| {
-        let Some(player) = mpris::get_default_player() else {
-            return warn!("No MPRIS player available to seek");
-        };
-
         let seek_amount = if delta < 0.0 {
             SEEK_STEP_MICROSECONDS
         } else {
             -SEEK_STEP_MICROSECONDS
         };
 
-        if let Err(e) = player.seek(seek_amount) {
-            error!(%e, "Failed to seek");
-        }
+        mpris::seek(seek_amount);
     }));
 
     mpris::subscribe_to_default_player_changes(clone!(
@@ -250,14 +230,14 @@ fn default_mpris_player() -> gtk::Box {
                     shuffle_button.set_css_classes(&["bar-mpris-button"]);
                 }
 
-                loop_button.set_label(if default_player.loop_status == mpris::mpris_player::LoopStatus::Track {"repeat_one"} else {"repeat"});
-                if default_player.loop_status != mpris::mpris_player::LoopStatus::None {
+                loop_button.set_label(if default_player.loop_status == LoopStatus::Track {"repeat_one"} else {"repeat"});
+                if default_player.loop_status != LoopStatus::None {
                     loop_button.set_css_classes(&["bar-mpris-button", "toggled"]);
                 } else {
                     loop_button.set_css_classes(&["bar-mpris-button"]);
                 }
 
-                if let (position, Some(duration)) = (default_player.position, default_player.metadata.length) {
+                if let (position, Some(duration)) = (mpris::get_position(), default_player.metadata.length) {
                     progress.set_label(&format!("{} / {}", format_duration(position), format_duration(duration)));
                     progress_bar.set_position(position as f64);
                     progress_bar.set_duration(duration as f64);
@@ -289,16 +269,15 @@ fn default_mpris_player() -> gtk::Box {
                 #[weak] progress,
                 #[weak] progress_bar,
                 move || {
-                    mpris::with_default_player_mut(|player| {
-                        if player.playback_status == PlaybackStatus::Playing
-                            && let Ok(position) = player.get_and_update_position()
-                            && let Some(duration) = player.metadata.length
-                        {
-                            progress.set_label(&format!("{} / {}", format_duration(position), format_duration(duration)));
-                            progress_bar.set_position(position as f64);
-                            progress_bar.set_duration(duration as f64);
-                        }
-                    });
+                    if let Some(player) = mpris::get_default_player()
+                        && player.playback_status == PlaybackStatus::Playing
+                        && let Some(duration) = player.metadata.length
+                    {
+                        let position = mpris::get_position();
+                        progress.set_label(&format!("{} / {}", format_duration(position), format_duration(duration)));
+                        progress_bar.set_position(position as f64);
+                        progress_bar.set_duration(duration as f64);
+                    }
                 }
             ));
 

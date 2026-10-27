@@ -4,17 +4,25 @@ use zbus::zvariant::{self, Array};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Update {
+    /// The player that updates are being reported for has changed (`None` when
+    /// there are no players left). A full state update for the new player
+    /// follows.
+    ActivePlayer(Option<String>),
     PlaybackStatus(PlaybackStatus),
     PlaybackRate(f64),
+    LoopStatus(LoopStatus),
+    Shuffle(bool),
+    Volume(f64),
     Position(Duration),
     Metadata(Metadata),
 }
 
 /* PlaybackUpdate */
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum PlaybackStatus {
     Playing,
     Paused,
+    #[default]
     Stopped,
 }
 
@@ -30,69 +38,87 @@ impl FromStr for PlaybackStatus {
     }
 }
 
-/* Metadata */
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Metadata {
-    pub title: String,
-    pub artist: Option<String>,
-    pub album: Option<String>,
-    pub art_uri: Option<String>,
-    pub length: Duration,
+/* LoopStatus */
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum LoopStatus {
+    #[default]
+    None,
+    Track,
+    Playlist,
 }
 
-impl TryFrom<HashMap<String, zvariant::OwnedValue>> for Metadata {
-    type Error = crate::Error;
-    fn try_from(value: HashMap<String, zvariant::OwnedValue>) -> Result<Self, Self::Error> {
-        /* Artist */
-        let artist = value
+impl LoopStatus {
+    /// The string the `LoopStatus` property uses for this status.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::None => "None",
+            Self::Track => "Track",
+            Self::Playlist => "Playlist",
+        }
+    }
+}
+
+impl FromStr for LoopStatus {
+    type Err = crate::Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "None" => Ok(Self::None),
+            "Track" => Ok(Self::Track),
+            "Playlist" => Ok(Self::Playlist),
+            _ => Err(crate::Error::ParseError(s.to_string())),
+        }
+    }
+}
+
+/* Metadata */
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Metadata {
+    pub title: Option<String>,
+    pub artists: Vec<String>,
+    pub album: Option<String>,
+    pub art_uri: Option<String>,
+    pub length: Option<Duration>,
+}
+
+/// Players are free to leave out any of the metadata keys, so nothing here is
+/// required to be present.
+impl From<HashMap<String, zvariant::OwnedValue>> for Metadata {
+    fn from(value: HashMap<String, zvariant::OwnedValue>) -> Self {
+        let string = |key: &str| {
+            value
+                .get(key)
+                .and_then(|v| v.downcast_ref::<String>().ok())
+                .filter(|s| !s.is_empty())
+        };
+
+        let artists = value
             .get("xesam:artist")
             .and_then(|v| v.downcast_ref::<Array>().ok())
-            .and_then(|v| v.first().cloned())
-            .map(|v| v.to_string());
+            .map(|artists| {
+                artists
+                    .iter()
+                    .filter_map(|artist| artist.downcast_ref::<String>().ok())
+                    .collect()
+            })
+            .unwrap_or_default();
 
-        /* Title */
-        let Some(title) = value.get("xesam:title") else {
-            return Err(crate::Error::ParseError(
-                "xesam:title not found".to_string(),
-            ));
-        };
+        let length = value
+            .get("mpris:length")
+            .and_then(|v| {
+                v.downcast_ref::<i64>()
+                    .ok()
+                    .and_then(|micros| u64::try_from(micros).ok())
+                    .or_else(|| v.downcast_ref::<u64>().ok())
+            })
+            .map(Duration::from_micros);
 
-        let title: String = title
-            .downcast_ref()
-            .map_err(|_| crate::Error::ParseError("xesam:title".to_string()))?;
-
-        /* Length */
-        let Some(micros) = value.get("mpris:length") else {
-            return Err(crate::Error::ParseError(
-                "mpris:length not found".to_string(),
-            ));
-        };
-
-        let micros: i64 = micros
-            .downcast_ref()
-            .map_err(|_| crate::Error::ParseError("mpris:length".to_string()))?;
-
-        #[allow(clippy::cast_sign_loss)]
-        let length = Duration::from_micros(micros as u64);
-
-        /* Album */
-        let album = value
-            .get("xesam:album")
-            .and_then(|v| v.downcast_ref::<String>().ok())
-            .filter(|s| !s.is_empty());
-
-        /* Art URI */
-        let art_uri = value
-            .get("mpris:artUrl")
-            .and_then(|v| v.downcast_ref::<String>().ok())
-            .filter(|s| !s.is_empty());
-
-        Ok(Self {
-            title,
-            artist,
-            album,
-            art_uri,
+        Self {
+            title: string("xesam:title"),
+            artists,
+            album: string("xesam:album"),
+            art_uri: string("mpris:artUrl"),
             length,
-        })
+        }
     }
 }

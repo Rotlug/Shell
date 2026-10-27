@@ -1,165 +1,205 @@
-pub mod mpris_player;
-mod mpris_metadata;
-mod mpris_dbus;
+//! MPRIS media player state, backed by the `mpris` crate.
+//!
+//! The crate reports updates for the active player over a channel; this keeps
+//! the latest state in signals the UI can subscribe to, and turns the
+//! player controls into fire-and-forget functions.
+use std::sync::{Arc, LazyLock, OnceLock};
+use std::time::Duration;
+use futures_signals::signal::{Mutable, SignalExt as _};
+use mpris::player::{Player, SeekDirection};
+use mpris::{Mpris, Update};
 
-use std::{rc::Rc, sync::LazyLock};
-use dbus::message::{MatchRule, MessageType};
-use futures_signals::{signal::SignalExt as _, signal_vec::{VecDiff, SignalVecExt as _}};
+pub use mpris::{LoopStatus, PlaybackStatus};
 
-use crate::dbus::start_monitoring;
-use crate::ipc;
-
-const MPRIS_DBUS_PREFIX: &str = "org.mpris.MediaPlayer2";
-const MPRIS_DBUS_PATH: &str = "/org/mpris/MediaPlayer2";
-
-#[derive(Default, Clone)]
-pub struct Mpris {
-    pub players: futures_signals::signal_vec::MutableVec<mpris_player::MprisPlayer>,
-    pub default_player: futures_signals::signal::Mutable<usize>
+/// Metadata of the current track. Lengths are in microseconds.
+#[derive(Debug, Clone, Default)]
+pub struct Metadata {
+    pub art_url: Option<String>,
+    pub album: Option<String>,
+    pub artist: Option<Vec<String>>,
+    pub title: Option<String>,
+    pub length: Option<i64>,
 }
 
-pub static MPRIS: LazyLock<Mpris> = LazyLock::new(Mpris::default);
-
-fn assert_default_player() {
-    // `len() - 1` would underflow once players is empty - compare against
-    // len() directly instead (true for every index, including 0, when
-    // there are no players at all, which correctly routes into
-    // set_default_player's own empty-players fallback below).
-    if MPRIS.default_player.get() >= MPRIS.players.lock_ref().len() {
-        set_default_player(0);
-    }
+/// A snapshot of the active player.
+#[derive(Debug, Clone, Default)]
+pub struct MprisPlayer {
+    pub playback_status: PlaybackStatus,
+    pub loop_status: LoopStatus,
+    pub shuffle: bool,
+    pub volume: f64,
+    pub metadata: Metadata,
 }
 
-pub fn get_default_player() -> Option<mpris_player::MprisPlayer> {
-    assert_default_player();
-    MPRIS.players.lock_ref().get(MPRIS.default_player.get()).cloned()
+/// The active player, or `None` if there are no players. Changes whenever
+/// anything except the position changes.
+pub static DEFAULT_PLAYER: LazyLock<Mutable<Option<MprisPlayer>>> = LazyLock::new(|| Mutable::new(None));
+
+/// The position of the active player, in microseconds. Kept separate from the
+/// rest of the state since it changes constantly while playing.
+pub static POSITION: LazyLock<Mutable<i64>> = LazyLock::new(|| Mutable::new(0));
+
+static MPRIS: OnceLock<Mpris> = OnceLock::new();
+
+pub fn get_default_player() -> Option<MprisPlayer> {
+    DEFAULT_PLAYER.get_cloned()
 }
 
-pub fn set_default_player(index: usize) {
-    if index < MPRIS.players.lock_ref().len() {
-        MPRIS.default_player.set(index);
-    } else if !MPRIS.players.lock_ref().is_empty() {
-        warn!(index, available = MPRIS.players.lock_ref().len(), "Attempted to set default player to invalid index");
-    } else {
-        // None are available, just fallback to 0
-        MPRIS.default_player.set(0);
-    }
+pub fn get_position() -> i64 {
+    POSITION.get()
 }
 
 pub fn subscribe_to_default_player_changes<F>(callback: F)
 where
-    F: Fn(usize) + 'static,
+    F: Fn(Option<MprisPlayer>) + 'static,
 {
-    let callback = Rc::new(callback);
+    glib::spawn_future_local(DEFAULT_PLAYER.signal_cloned().for_each(move |player| {
+        callback(player);
+        async {}
+    }));
+}
 
-    glib::spawn_future_local({
-        let callback = callback.clone();
+fn apply(update: Update) {
+    let mut player = DEFAULT_PLAYER.lock_mut();
 
-        signal_vec_cloned!(MPRIS.players, (change) {
-            let run_callback = || {
-                let callback = callback.clone();
+    match update {
+        Update::ActivePlayer(name) => {
+            *player = name.map(|_| MprisPlayer::default());
+            POSITION.set(0);
+        },
 
-                glib::source::idle_add_local_once(move || {
-                    assert_default_player();
-                    callback(MPRIS.default_player.get());
-                });
+        Update::Position(position) => {
+            POSITION.set(i64::try_from(position.as_micros()).unwrap_or(i64::MAX));
+        },
+
+        // Rate is already accounted for by the crate in the positions it reports
+        Update::PlaybackRate(_) => {},
+
+        Update::PlaybackStatus(status) => if let Some(player) = player.as_mut() {
+            player.playback_status = status;
+        },
+
+        Update::LoopStatus(loop_status) => if let Some(player) = player.as_mut() {
+            player.loop_status = loop_status;
+        },
+
+        Update::Shuffle(shuffle) => if let Some(player) = player.as_mut() {
+            player.shuffle = shuffle;
+        },
+
+        Update::Volume(volume) => if let Some(player) = player.as_mut() {
+            player.volume = volume;
+        },
+
+        Update::Metadata(metadata) => if let Some(player) = player.as_mut() {
+            player.metadata = Metadata {
+                art_url: metadata.art_uri,
+                album: metadata.album,
+                artist: (!metadata.artists.is_empty()).then_some(metadata.artists),
+                title: metadata.title,
+                length: metadata.length.map(|l| i64::try_from(l.as_micros()).unwrap_or(i64::MAX)),
             };
+        },
+    }
+}
 
-            match change {
-                // Do nothing if there's already more than one player
-                // This is for if a player is instantiated when there's no players
-                VecDiff::Push {..} => if MPRIS.players.lock_ref().len() == 1 {
-                    run_callback();
+/// Runs `action` on the active player in the background, logging failures.
+fn control<F, Fut>(description: &'static str, action: F)
+where
+    F: FnOnce(Arc<Player>) -> Fut + Send + 'static,
+    Fut: Future<Output = mpris::Result<()>> + Send,
+{
+    tokio::spawn(async move {
+        let Some(player) = get_active_player().await else {
+            return warn!("No MPRIS player available to {description}");
+        };
+
+        if let Err(e) = action(player).await {
+            error!(%e, "Failed to {description}");
+        }
+    });
+}
+
+async fn get_active_player() -> Option<Arc<Player>> {
+    MPRIS.get()?.get_active_player().await
+}
+
+pub fn play_pause() {
+    control("toggle play/pause", |p| async move { p.play_pause().await });
+}
+
+pub fn play() {
+    control("play", |p| async move { p.play().await });
+}
+
+pub fn pause() {
+    control("pause", |p| async move { p.pause().await });
+}
+
+pub fn next() {
+    control("skip to next track", |p| async move { p.next().await });
+}
+
+pub fn previous() {
+    control("skip to previous track", |p| async move { p.previous().await });
+}
+
+/// Seeks relative to the current position, by `microseconds` (negative to go back).
+pub fn seek(microseconds: i64) {
+    let direction = if microseconds < 0 { SeekDirection::Backwards } else { SeekDirection::Forwards };
+    let duration = Duration::from_micros(microseconds.unsigned_abs());
+
+    control("seek", move |p| async move { p.seek(duration, direction).await });
+}
+
+pub fn set_loop_status(loop_status: LoopStatus) {
+    control("set loop status", move |p| async move { p.set_loop_status(loop_status).await });
+}
+
+pub fn set_shuffle(shuffle: bool) {
+    control("set shuffle", move |p| async move { p.set_shuffle(shuffle).await });
+}
+
+pub fn adjust_volume(delta: f64) {
+    control("adjust volume", move |p| async move { p.adjust_volume(delta).await });
+}
+
+pub async fn activate() {
+    let mpris = match Mpris::new().await {
+        Ok(mpris) => mpris,
+        Err(e) => return error!(%e, "Failed to start MPRIS, media players will not be available"),
+    };
+
+    let mut updates = mpris.subscribe();
+    let Ok(()) = MPRIS.set(mpris) else { return };
+
+    // Catch up with the players that were already running
+    if let Some(mpris) = MPRIS.get() {
+        mpris.sync().await;
+    }
+
+    tokio::spawn(async move {
+        loop {
+            match updates.recv().await {
+                Ok(update) => apply(update),
+                // We fell behind, ask for the current state instead of guessing what was missed
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => if let Some(mpris) = MPRIS.get() {
+                    mpris.sync().await;
                 },
-
-                VecDiff::UpdateAt { index, .. } |
-                VecDiff::RemoveAt { index } => if index == MPRIS.default_player.get() {
-                    run_callback();
-                },
-                
-                VecDiff::Pop {} | VecDiff::Clear {} => run_callback(),
-
-                _ => {}
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
             }
-        })
+        }
     });
 
-    glib::spawn_future_local(signal!(MPRIS.default_player, (index) {
-        let callback = callback.clone();
-        
-        glib::source::idle_add_local_once(move || callback(index));
-    }));
-}
-
-#[allow(clippy::option_if_let_else)]
-pub fn with_default_player_mut<F, R>(func: F) -> Option<R>
-where
-    F: FnOnce(&mut mpris_player::MprisPlayer) -> R,
-{
-    assert_default_player();
-    let mut players = MPRIS.players.lock_mut();
-    let index = MPRIS.default_player.get();
-    if let Some(player) = players.get(index) {
-        let mut player = player.clone();
-        let result = func(&mut player);
-        players.set_cloned(index, player);
-        Some(result)
-    } else {
-        None
-    }
-}
-
-pub fn activate() {
-    // Get our initial list of MPRIS players
-    let connection = dbus::blocking::SyncConnection::new_session().expect("Failed to connect to D-Bus");
-    let proxy = connection.with_proxy(
-        "org.freedesktop.DBus", 
-        "/org/freedesktop/DBus", 
-        std::time::Duration::from_millis(5000)
-    );
-
-    let (names,): (Vec<String>,) = proxy.method_call("org.freedesktop.DBus", "ListNames", ()).unwrap();
-    for name in names {
-        if name.starts_with(MPRIS_DBUS_PREFIX) {
-            // Get the owner for this player
-            let owner_opt: Option<String> = proxy
-                .method_call("org.freedesktop.DBus", "GetNameOwner", (name.clone(),))
-                .map(|(owner,)| owner)
-                .ok();
-
-            if let Some(owner) = owner_opt {
-                let player = mpris_player::MprisPlayer::new(name, owner);
-
-                MPRIS.players.lock_mut().push_cloned(player);
-            }
-        }
-    }
-
-    // Start monitoring dbus for new MPRIS players + MPRIS player changes
-    let rule = MatchRule::new()
-        .with_type(MessageType::Signal);
-    
-    start_monitoring(rule, false, mpris_dbus::handle_master_message);
-
-    // Monitor the MPRIS players for changes
-    tokio::spawn(signal_vec_cloned!(MPRIS.players, (change) {
-        match change {
-            VecDiff::RemoveAt {..} | VecDiff::Pop {} | VecDiff::Clear {} => assert_default_player(),
-            _ => {}
-        }
-    }));
-
     // Monitor IPC commands for controlling MPRIS players
-    ipc::listen_for_messages_local(move |message| {
-        std::thread::spawn(move || match message.as_str() {
-            "mpris_next" => { let _ = with_default_player_mut(|p| p.next()); },
-            "mpris_previous" => { let _ = with_default_player_mut(|p| p.previous()); },
-            "mpris_play_pause" => { let _ = get_default_player().map(|p| p.play_pause()); },
-            "mpris_play" => { let _ = get_default_player().map(|p| p.play()); },
-            "mpris_pause" => { let _ = get_default_player().map(|p| p.pause()); },
-            "mpris_volume_up" => { let _ = get_default_player().map(|p| p.adjust_volume(0.05)); },
-            "mpris_volume_down" => { let _ = get_default_player().map(|p| p.adjust_volume(-0.05)); },
-            _ => {},
-        });
+    crate::ipc::listen_for_messages_local(|message| match message.as_str() {
+        "mpris_next" => next(),
+        "mpris_previous" => previous(),
+        "mpris_play_pause" => play_pause(),
+        "mpris_play" => play(),
+        "mpris_pause" => pause(),
+        "mpris_volume_up" => adjust_volume(0.05),
+        "mpris_volume_down" => adjust_volume(-0.05),
+        _ => {},
     });
 }

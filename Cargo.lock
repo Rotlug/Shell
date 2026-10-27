@@ -1348,6 +1348,7 @@ dependencies = [
  "image",
  "libadwaita",
  "libc",
+ "mpris",
  "niri-ipc",
  "notify",
  "num-traits",

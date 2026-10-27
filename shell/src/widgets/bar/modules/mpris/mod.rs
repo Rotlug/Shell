@@ -17,40 +17,27 @@ pub fn new() -> BarModule {
     module.add_controller(gesture::on_middle_down(clone!(
         #[weak] module,
         move |_, _, _| if !module.expanded() {
-            let Some(player) = mpris::get_default_player() else {
-                return warn!("No MPRIS player available to toggle play/pause");
-            };
-
-            if let Err(e) = player.play_pause() {
-                error!(%e, "Failed to toggle play/pause");
-            }
+            mpris::play_pause();
         }
     )));
 
     module.add_controller(gesture::on_secondary_down(clone!(
         #[weak] module,
         move |_, _, _| if !module.expanded() {
-            mpris::with_default_player_mut(|player| if let Err(e) = player.next() {
-                error!(%e, "Failed to skip to next track");
-            });
+            mpris::next();
         }
     )));
 
     module.add_controller(gesture::on_vertical_scroll(clone!(
         #[weak] module,
         move |delta_y| if !module.expanded() {
-            let Some(player) = mpris::get_default_player() else {
-                return warn!("No MPRIS player available to adjust volume");
-            };
-
             let step = if delta_y < 0.0 {
                 VOLUME_STEP
             } else {
                 -VOLUME_STEP
             };
 
-            player.adjust_volume(step)
-                .unwrap_or_else(|e| error!(%e, "Failed to adjust volume"));
+            mpris::adjust_volume(step);
         }
     )));
 
