@@ -59,12 +59,16 @@
             # release build rather than fighting those.
             RUSTFLAGS = "--cap-lints warn";
 
-            # scss.rs shells out to the `sass` CLI (Dart Sass) at startup to
-            # compile styles - it's not a build-time dependency so it isn't
-            # caught by buildInputs/cargo at all, just a hard runtime
-            # requirement. wrapGAppsHook4 already wraps the binary; this
-            # appends to that same wrapper instead of adding a second,
-            # conflicting one.
+            # This builds the shell and the apps that come with it
+            # (gms-session, gms-launcher): the default members of the
+            # workspace. The libraries' demo binaries are left out.
+            #
+            # gms_style shells out to the `sass` CLI (Dart Sass) to compile
+            # styles, in every one of those - it's not a build-time
+            # dependency so it isn't caught by buildInputs/cargo at all,
+            # just a hard runtime requirement. wrapGAppsHook4 already wraps
+            # the binaries; this appends to those same wrappers instead of
+            # adding second, conflicting ones.
             # system_stats' nvidia feature (GPU memory) dlopen()s libnvidia-ml.so at
             # runtime rather than linking it - it's the proprietary driver's
             # library, which on NixOS only ever lives under
@@ -83,6 +87,37 @@
               mainProgram = "gray-meadows-shell";
               platforms = pkgs.lib.platforms.linux;
             };
+          };
+
+          # The example scripts of gms-launcher, ready to bind to keys.
+          # The awk programs are single-quoted on purpose: they are awk
+          # source, not meant to undergo shell expansion.
+          packages.gms-app-picker = pkgs.writeShellApplication {
+            name = "gms-app-picker";
+            runtimeInputs = with pkgs; [
+              self'.packages.default # gms-launcher
+              glib # gio
+              findutils
+              gawk
+              coreutils
+              util-linux # setsid
+            ];
+            excludeShellChecks = [ "SC2016" ];
+            text = builtins.readFile ./apps/launcher/examples/app-picker.sh;
+          };
+
+          packages.gms-emoji-picker = pkgs.writeShellApplication {
+            name = "gms-emoji-picker";
+            runtimeInputs = with pkgs; [
+              self'.packages.default # gms-launcher
+              gawk
+              coreutils
+              wl-clipboard
+              wtype
+            ];
+            runtimeEnv.EMOJI_DATA = ./apps/launcher/examples/emoji-data.txt;
+            excludeShellChecks = [ "SC2016" ];
+            text = builtins.readFile ./apps/launcher/examples/emoji-picker.sh;
           };
 
           devShells.default = pkgs.mkShell {

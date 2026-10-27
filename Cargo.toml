@@ -1,4 +1,4 @@
 [workspace]
 resolver = "3"
-members = ["shell", "crates/*"]
-default-members = ["shell"]
+members = ["shell", "apps/*", "crates/*"]
+default-members = ["shell", "apps/*"]

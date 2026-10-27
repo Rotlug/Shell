@@ -1,6 +1,5 @@
 pub mod popup;
 pub mod fullscreen;
-pub mod session;
 pub mod sidebar_left;
 pub mod sidebar_right;
 pub mod clipboard;

@@ -4,7 +4,7 @@ use futures_signals::signal::SignalExt as _;
 
 use crate::USERNAME;
 use crate::services::sysstats::SYS_STATS;
-use crate::utils::filesystem;
+use crate::utils::{filesystem, process};
 use crate::widgets::windows;
 
 fn parse_uptime_seconds(seconds: u64) -> String {
@@ -79,7 +79,8 @@ pub fn new() -> gtk::Box {
                 set_valign: gtk::Align::Center,
                 connect_clicked: move |_| {
                     windows::hide("right_sidebar");
-                    windows::toggle("session");
+                    // The logout selector is an app of its own
+                    process::launch("gms-session");
                 },
 
                 gtk::Label {

@@ -13,7 +13,6 @@ mod widgets;
 mod utils;
 mod scss;
 mod pixbuf;
-mod session;
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -91,7 +90,6 @@ fn activate(application: &Application) {
 
     APP_LOCAL.with(|app| {
         let mut windows = app.windows.borrow_mut();
-        windows.insert("session".into(), Box::new(widgets::windows::session::new(application)));
         windows.insert("left_sidebar".into(), Box::new(widgets::windows::sidebar_left::new(application)));
         windows.insert("right_sidebar".into(), Box::new(widgets::windows::sidebar_right::new(application)));
 

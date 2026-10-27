@@ -5,7 +5,7 @@ pub use gms_style::get_color;
 
 /// Compiles the styles, and loads them.
 pub fn bundle_apply_scss() {
-    match gms_style::compile() {
+    match gms_style::compile("main") {
         Ok(css) => glib::MainContext::default().invoke(move || {
             APP_LOCAL.with(|app| app.provider.load_from_data(&css));
         }),

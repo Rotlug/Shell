@@ -1,7 +1,6 @@
 .bar-window .bar .bar-widget .bar-power-profile-icon {
     color: $foreground-color-primary;
     min-width: 1.2em;
-    text-align: center;
     // Nerd Font glyphs overflow their advance width on the right, so pad that side to look centered
     padding-right: 3px;
 

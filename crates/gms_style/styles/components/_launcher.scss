@@ -1,0 +1,90 @@
+.launcher-window {
+    @include normal-text;
+    background-color: transparent;
+    color: $foreground-color-primary;
+
+    .launcher-box {
+        min-width: 480px;
+    }
+
+    .launcher-entry-box {
+        background: $background-color-primary;
+        border: 1px solid $border-color-primary;
+        margin-bottom: 8px;
+        padding-left: 8px;
+        padding-right: 8px;
+        padding-top: 6px;
+        padding-bottom: 6px;
+
+        .launcher-entry-icon {
+            @include material-icons;
+            font-size: 18px;
+            margin-right: 8px;
+            color: $foreground-color-secondary;
+        }
+
+        .launcher-entry {
+            outline: none;
+            padding-top: 4px;
+            background: transparent;
+            color: $foreground-color-primary;
+            caret-color: $foreground-color-select;
+
+            selection {
+                background-color: $foreground-color-select;
+                color: $background-color-quaternary;
+            }
+
+            // What is typed in when nothing is
+            placeholder {
+                color: $foreground-color-secondary;
+            }
+        }
+    }
+
+    .launcher-results {
+        background: $background-color-primary;
+        border: 1px solid $border-color-primary;
+        padding: 6px;
+
+        .launcher-list {
+            background: transparent;
+
+            row {
+                @include large-text;
+                padding: 0px;
+                border-radius: 0px;
+                background: transparent;
+                color: $foreground-color-primary;
+                outline: none;
+
+                &:hover {
+                    background: $background-color-secondary;
+                }
+
+                &:selected {
+                    background: $background-color-tertiary;
+                    color: $foreground-color-primary;
+                }
+
+                &:active {
+                    background: $background-color-quaternary;
+                }
+            }
+        }
+
+        .launcher-item {
+            padding: 6px 8px;
+            font-weight: normal;
+
+            .launcher-item-icon {
+                margin-right: 16px;
+            }
+        }
+
+        .launcher-no-results {
+            color: $foreground-color-secondary;
+            padding: 12px;
+        }
+    }
+}

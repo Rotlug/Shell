@@ -53,29 +53,33 @@ fn refresh_colors(user_styles: &str) {
     *COLORS.lock().unwrap() = colors;
 }
 
-/// Compiles the stylesheet into CSS for GTK, getting everything ready for that first:
+/// Compiles a stylesheet into CSS for GTK, getting everything ready for that first:
 /// stylesheet that isn't in `~/.config/gray-meadows/styles` yet is put there, and `GMS_*`
 /// environment variables are applied.
+///
+/// `entry` is the file that is compiled, without `.scss`: the shell has `main`, every app its
+/// own. That way, they only carry the styles they use, and new ones don't depend on an old
+/// `main.scss` that was copied before they existed.
 ///
 /// This is quick when nothing changed since last time, the CSS is cached then.
 ///
 /// # Errors
 /// Errors when the styles can't be read or written, or when `sass` fails (or isn't there).
-pub fn compile() -> Result<String> {
+pub fn compile(entry: &str) -> Result<String> {
     let styles = styles_directory()?;
     environment::write_default_styles(&styles)?;
 
     refresh_colors(&fs::read_to_string(styles.join("_user.scss")).unwrap_or_default());
 
-    let cache = paths::cache_directory()?.join(format!("style-{:016x}.css", hash_sources(&styles)?));
+    let cache = paths::cache_directory()?.join(format!("style-{entry}-{:016x}.css", hash_sources(&styles)?));
 
     if let Ok(css) = fs::read_to_string(&cache) {
         return Ok(css);
     }
 
-    let css = run_sass(&styles)?;
+    let css = run_sass(&styles, entry)?;
 
-    if let Err(error) = store_in_cache(&cache, &css) {
+    if let Err(error) = store_in_cache(&cache, entry, &css) {
         // Nothing wrong with the CSS, it's just not going to be quick the next time
         tracing::warn!(%error, "Failed to cache the compiled styles");
     }
@@ -83,11 +87,11 @@ pub fn compile() -> Result<String> {
     Ok(css)
 }
 
-fn run_sass(styles: &Path) -> Result<String> {
+fn run_sass(styles: &Path, entry: &str) -> Result<String> {
     let output = Command::new("sass")
         .arg("-I")
         .arg(styles)
-        .arg(styles.join("main.scss"))
+        .arg(styles.join(format!("{entry}.scss")))
         .output()
         .map_err(Error::SassNotRun)?;
 
@@ -128,7 +132,7 @@ fn hash_sources(styles: &Path) -> Result<u64> {
     Ok(hasher.finish())
 }
 
-fn store_in_cache(cache: &Path, css: &str) -> std::io::Result<()> {
+fn store_in_cache(cache: &Path, entry: &str, css: &str) -> std::io::Result<()> {
     let dir = cache.parent().expect("a cache file is in a directory");
     fs::create_dir_all(dir)?;
 
@@ -137,11 +141,12 @@ fn store_in_cache(cache: &Path, css: &str) -> std::io::Result<()> {
     fs::write(&temporary, css)?;
     fs::rename(&temporary, cache)?;
 
-    // Whatever the stylesheet was before is of no use anymore
+    // Whatever this stylesheet was before is of no use anymore
+    let prefix = format!("style-{entry}-");
     for entry in fs::read_dir(dir)?.flatten() {
         let path = entry.path();
         let is_old_style = path.file_name().and_then(|name| name.to_str()).is_some_and(|name| {
-            name.starts_with("style-") && name.ends_with(".css")
+            name.starts_with(&prefix) && name.ends_with(".css")
         });
 
         if is_old_style && path != cache {

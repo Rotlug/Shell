@@ -59,13 +59,13 @@ I express my deep gratitude to the following sponsors for their generous support
 - Bar with workspace management, music controls, system tray, system stats, volume, and more
 - OSD for notifications, volume and submaps
 - Clipboard manager powered by `cliphist` and `wl-clipboard`
-- Overview:
-  - Application launcher with intelligent searching
-  - Tracking of most launched applications, most launched apps get a search weight boost
-  - Run web searches, execute shell commands, calculator powered by Qalculate, text transformation tools, and more
+- Apps of their own, that look like the shell and follow the same `GMS_*` environment variables:
+  - `gms-launcher`: a generic launcher. It shows the entries it is given on stdin and prints the one that is picked, so what it launches is up to a script. [Examples](../apps/launcher/README.md) for an application picker and an emoji picker are included
+  - `gms-session`: the logout selector (lock, log out, suspend, hibernate, reboot, shut down)
 - Right sidebar:
   - Notifications
   - Audio controls
+  - Brightness of all monitors, internal and external
   - Calendar
   - Weather
   - Timers *(soon)*

@@ -1,10 +1,13 @@
-//! Compiles the styles and says how it went: `HOME=$(mktemp -d) cargo run --example compile`
+//! Compiles a stylesheet (`main` unless told otherwise) and says how it went:
+//! `HOME=$(mktemp -d) cargo run --example compile [entry]`
 use std::time::Instant;
 
 fn main() {
     let start = Instant::now();
 
-    match gms_style::compile() {
+    let entry = std::env::args().nth(1).unwrap_or_else(|| "main".to_string());
+
+    match gms_style::compile(&entry) {
         Ok(css) => println!(
             "{} bytes of css in {:?}, foreground-color-primary: {:?}",
             css.len(),
