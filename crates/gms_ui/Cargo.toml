@@ -1,0 +1,11 @@
+[package]
+name = "gms_ui"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+gdk = { version = "0.10.3", package = "gdk4" }
+glib = "0.21.5"
+gms_style = { path = "../gms_style" }
+gtk = { version = "0.10.3", features = ["v4_8"], package = "gtk4" }
+tracing = "0.1.44"

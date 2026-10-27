@@ -1,8 +1,10 @@
 pub mod models;
 
+/// How far apart two floating point components can be and still be the same color
+pub(crate) const FLOAT_TOLERANCE: f64 = 0.0001;
+
 use std::cmp::Ordering::Equal;
 
-use crate::FLOAT_TOLERANCE;
 use self::models::{Rgba, Hsv, Hsl, Cmyk, Oklab, Oklch, ColorModel as _};
 
 pub struct LighterDarkerResult {

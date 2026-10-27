@@ -8,9 +8,6 @@ pub fn get_config_directory() -> String {
     format!("{}/.config/gray-meadows", home)
 }
 
-pub fn get_styles_directory() -> String {
-    format!("{}/styles", get_config_directory())
-}
 
 pub fn get_local_data_directory() -> String {
     format!("{}/.local/share/gray-meadows", get_home_directory())

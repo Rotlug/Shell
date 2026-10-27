@@ -518,6 +518,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "color"
+version = "0.1.0"
+dependencies = [
+ "regex",
+]
+
+[[package]]
 name = "color_quant"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1277,6 +1284,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e4eba85ea1d0a966a983acd07deee566e67395d2d96b6fb39e62b5a833f1eb0b"
 
 [[package]]
+name = "gms_style"
+version = "0.1.0"
+dependencies = [
+ "color",
+ "notify",
+ "regex",
+ "thiserror 2.0.21",
+ "tracing",
+]
+
+[[package]]
+name = "gms_ui"
+version = "0.1.0"
+dependencies = [
+ "gdk4",
+ "glib",
+ "gms_style",
+ "gtk4",
+ "tracing",
+]
+
+[[package]]
 name = "gobject-sys"
 version = "0.21.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1320,11 +1349,14 @@ dependencies = [
  "brightness",
  "cairo-rs",
  "chrono",
+ "color",
  "discord",
  "futures-signals",
  "gdk4",
  "gio",
  "glib",
+ "gms_style",
+ "gms_ui",
  "graphene-rs",
  "gsk4",
  "gtk4",

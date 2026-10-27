@@ -26,6 +26,9 @@ image = "0.25.10"
 libadwaita = { version = "0.8.1", features = ["v1_4", "v1_7"] }
 libc = "0.2.189"
 brightness = { path = "../crates/brightness" }
+color = { path = "../crates/color" }
+gms_style = { path = "../crates/gms_style" }
+gms_ui = { path = "../crates/gms_ui" }
 discord = { path = "../crates/discord" }
 mpris = { path = "../crates/mpris" }
 notif_daemon = { path = "../crates/notif_daemon" }

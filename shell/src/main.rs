@@ -7,7 +7,6 @@ extern crate tracing;
 #[macro_use]
 mod macros;
 
-mod color;
 mod ipc;
 mod services;
 mod widgets;
@@ -29,7 +28,6 @@ use tracing_subscriber::fmt::time::ChronoLocal;
 use self::widgets::{bar, windows::{self, GmsWindow}, notifications::NotificationsWindow};
 use self::utils::{display, process};
 
-const FLOAT_TOLERANCE: f64 = 0.0001;
 
 pub struct GrayMeadowsLocal {
     provider: gtk::CssProvider,

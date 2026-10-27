@@ -42,7 +42,7 @@ mod imp {
 
 use gtk::prelude::*;
 
-use crate::color;
+use color;
 use crate::services::clipboard;
 use crate::widgets::common::loading;
 

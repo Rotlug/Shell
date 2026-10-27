@@ -7,8 +7,8 @@ use std::time::Duration;
 use futures_signals::signal::{Mutable, SignalExt as _};
 use gtk::{Adjustment, prelude::*};
 
-use crate::color::{parse_color_into_hex, int_to_hex};
-use crate::color::models::{Rgba, Hsv, Hsl, Cmyk, Oklab, Oklch, ColorModel as _};
+use color::{parse_color_into_hex, int_to_hex};
+use color::models::{Rgba, Hsv, Hsl, Cmyk, Oklab, Oklch, ColorModel as _};
 use crate::ipc;
 use crate::services::clipboard;
 use crate::utils::timeout::Timeout;

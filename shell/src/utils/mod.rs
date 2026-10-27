@@ -2,7 +2,7 @@ pub mod allocation_watcher;
 pub mod broadcast;
 pub mod display;
 pub mod filesystem;
-pub mod gesture;
+pub use gms_ui::gesture;
 pub mod matching;
 pub mod process;
 pub mod timeout;

@@ -3,8 +3,8 @@ use futures_signals::signal::{Mutable, SignalExt as _};
 use gtk::prelude::*;
 
 use crate::ipc;
-use crate::color::LighterDarkerResult;
-use crate::color::models::{Rgba, Hsv, Hsl, Cmyk, Oklab, Oklch, ColorModel as _};
+use color::LighterDarkerResult;
+use color::models::{Rgba, Hsv, Hsl, Cmyk, Oklab, Oklch, ColorModel as _};
 use crate::services::clipboard;
 use crate::utils::gesture;
 use crate::widgets::common::{dynamic_grid::DynamicGrid, tabs::Tabs};
@@ -114,7 +114,7 @@ pub fn get_analogous_color_boxes(hsv: &Mutable<Hsv>, count: u32, color_tabs: &Ta
         let boxes = boxes.clone();
         let color = hsv.get();
         signal!(hsv, (hsv) {
-            let analogous_colors = crate::color::get_analogous_colors(hsv, count);
+            let analogous_colors = color::get_analogous_colors(hsv, count);
             for (i, color_box) in boxes.iter().enumerate() {
                 let new_color = analogous_colors.get(i).unwrap_or(&color);
 
@@ -150,7 +150,7 @@ pub fn get_lighter_darker_color_boxes(hsv: &Mutable<Hsv>, count: u32, color_tabs
         let boxes = boxes.clone();
         let color = hsv.get();
         signal!(hsv, (hsv) {
-            let lighter_darker_colors = crate::color::get_lighter_darker_colors(hsv, count);
+            let lighter_darker_colors = color::get_lighter_darker_colors(hsv, count);
             let default_result = LighterDarkerResult {
                 hsv: color,
                 lightness: 0.0,

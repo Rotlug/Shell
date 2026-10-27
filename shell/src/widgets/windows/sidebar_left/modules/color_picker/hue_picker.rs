@@ -2,7 +2,7 @@ use std::{rc::Rc, cell::RefCell};
 use futures_signals::signal::{Mutable, SignalExt as _};
 use gtk::prelude::*;
 
-use crate::color::models::Hsv;
+use color::models::Hsv;
 use crate::utils::gesture;
 
 #[derive(Debug, Clone)]
