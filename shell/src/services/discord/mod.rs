@@ -25,12 +25,12 @@ fn apply(event: &Event) {
     };
 
     match event {
-        Event::UserJoined(user) => if !users.contains(user) {
+        // Users are told apart by name, so a user that joins again replaces the old entry
+        Event::UserJoined(user) => {
+            users.retain(|existing| existing.name != user.name);
             users.push(user.clone());
         },
-        Event::UserLeft(name) => if let Some(index) = users.iter().position(|user| user.name == *name) {
-            users.remove(index);
-        },
+        Event::UserLeft(name) => users.retain(|user| user.name != *name),
     }
 }
 

@@ -18,6 +18,10 @@ struct Participants {
 
 impl Participants {
     fn add(&mut self, user: User) {
+        // A user can be announced twice (in the snapshot of who is there, and as an event),
+        // and there should only ever be one of them
+        self.remove(&user.name);
+
         view! {
             widget = gtk::Image {
                 set_css_classes: &["bar-discord-avatar"],
@@ -53,11 +57,16 @@ impl Participants {
     }
 
     fn remove(&mut self, name: &str) {
-        if let Some(index) = self.participants.iter().position(|participant| participant.name == name) {
-            let participant = self.participants.remove(index);
-            self.box_.remove(&participant.widget);
-            self.update_visibility();
-        }
+        self.participants.retain(|participant| {
+            let keep = participant.name != name;
+
+            if !keep {
+                self.box_.remove(&participant.widget);
+            }
+
+            keep
+        });
+        self.update_visibility();
     }
 
     fn update_visibility(&self) {
