@@ -10,3 +10,5 @@ ddc-i2c = { version = "0.2.2", features = [
   "with-linux-enumerate",
 ] }
 thiserror = "2.0.18"
+tokio = { version = "1.49.0", features = ["sync"] }
+zbus = "5.13.2"

@@ -381,6 +381,8 @@ dependencies = [
  "ddc",
  "ddc-i2c",
  "thiserror 2.0.21",
+ "tokio",
+ "zbus",
 ]
 
 [[package]]
@@ -1298,6 +1300,7 @@ dependencies = [
  "anyhow",
  "async-broadcast",
  "async-channel",
+ "brightness",
  "cairo-rs",
  "chrono",
  "futures-signals",

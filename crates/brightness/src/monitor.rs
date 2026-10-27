@@ -1,40 +1,38 @@
-use ddc::Ddc;
-use ddc_i2c::{I2cDeviceDdc, I2cDeviceEnumerator};
+use std::fmt;
 
-const BRIGHTNESS: u8 = 0x10;
+/// Identifies a monitor for as long as it stays connected.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct MonitorId(pub(crate) String);
 
+impl MonitorId {
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for MonitorId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MonitorKind {
+    /// The panel of a laptop
+    Internal,
+    /// A monitor that is connected to the machine
+    External,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct Monitor {
-    handle: I2cDeviceDdc,
-}
-
-impl Monitor {
-    pub fn get_brightness(&mut self) -> u16 {
-        self.handle
-            .get_vcp_feature(BRIGHTNESS)
-            .map(|v| v.value())
-            .unwrap_or(0)
-    }
-
-    pub fn set_brightness(&mut self, new_val: u16) {
-        if !(0..=100).contains(&new_val) {
-            return;
-        }
-
-        let _ = self.handle.set_vcp_feature(BRIGHTNESS, new_val);
-        let _ = self.handle.save_current_settings();
-    }
-}
-
-impl From<I2cDeviceDdc> for Monitor {
-    fn from(handle: I2cDeviceDdc) -> Self {
-        Self { handle }
-    }
-}
-
-pub fn get_all_monitors() -> Vec<Monitor> {
-    let Ok(enumerator) = I2cDeviceEnumerator::new() else {
-        return vec![];
-    };
-
-    enumerator.map(Monitor::from).collect()
+    pub id: MonitorId,
+    pub kind: MonitorKind,
+    /// How the monitor is connected, e.g. `eDP-1` or `DP-2`, if that is known.
+    pub connector: Option<String>,
+    /// The model of the monitor, e.g. `DELL U2720Q`.
+    pub name: String,
+    /// From 0.0 to 1.0
+    pub brightness: f64,
 }

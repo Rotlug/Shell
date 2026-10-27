@@ -10,6 +10,7 @@ pub mod networkmanager;
 pub mod clipboard;
 pub mod idle_inhibitor;
 pub mod power_profiles;
+pub mod brightness;
 
 pub async fn activate_all() {
     date_time::activate();
@@ -22,5 +23,6 @@ pub async fn activate_all() {
     networkmanager::activate().await;
     clipboard::activate();
     power_profiles::activate().await;
+    brightness::activate();
     idle_inhibitor::activate().await;
 }
