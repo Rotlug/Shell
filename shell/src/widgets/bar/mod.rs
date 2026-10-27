@@ -7,6 +7,7 @@ mod modules {
     pub mod clock;
     pub mod tray;
     pub mod volume;
+    pub mod discord;
     pub mod network;
     pub mod power_profile;
 }
@@ -91,6 +92,7 @@ impl BarWindow {
                 set_spacing: 1,
                 set_valign: gtk::Align::Start,
 
+                append: &modules::discord::new(),
                 append: &modules::tray::new(),
                 append: &modules::power_profile::new(),
                 append: &modules::network::new(),

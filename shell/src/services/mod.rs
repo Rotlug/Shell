@@ -11,6 +11,7 @@ pub mod clipboard;
 pub mod idle_inhibitor;
 pub mod power_profiles;
 pub mod brightness;
+pub mod discord;
 
 pub async fn activate_all() {
     date_time::activate();
@@ -24,5 +25,6 @@ pub async fn activate_all() {
     clipboard::activate();
     power_profiles::activate().await;
     brightness::activate();
+    discord::activate();
     idle_inhibitor::activate().await;
 }
