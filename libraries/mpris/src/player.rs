@@ -2,11 +2,11 @@ use std::{hash::Hash, str::FromStr, time::Duration};
 
 use futures::StreamExt;
 use tokio::{sync::broadcast, task::JoinHandle};
-use zbus::Connection;
+use zbus::{Connection, zvariant::ObjectPath};
 
 use crate::{
     LoopStatus, Metadata, PlaybackStatus, Update, generated::player::PlayerProxy,
-    player::position::Position,
+    player::position::{Position, Track},
 };
 
 mod position;
@@ -14,6 +14,9 @@ mod position;
 /// 1.0 is only a sensible max, some players allow more than this.
 /// 1.5 is the true max limit for pulse/pipewire servers.
 const MAX_VOLUME: f64 = 1.5;
+
+/// What players say the track is when there is none, `SetPosition` can't be used with it.
+const NO_TRACK: &str = "/org/mpris/MediaPlayer2/TrackList/NoTrack";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SeekDirection {
@@ -34,6 +37,11 @@ pub struct Player {
     position: Position,
 }
 
+/// Tells the position tracker about the track of `metadata`, and what it is going on about.
+fn track_of(metadata: &Metadata) -> Track {
+    Track { id: metadata.track_id.clone(), title: metadata.title.clone() }
+}
+
 impl Player {
     /// Creates a new `Player` object that starts listening to events.
     /// call `subscribe` to receive events for this player.
@@ -50,12 +58,14 @@ impl Player {
             .await?;
         let (tx, _) = broadcast::channel(16);
 
+        let position = Position::new(proxy.clone(), tx.clone()).await?;
+
         /* Update task */
         let proxy_handle = proxy.clone();
         let tx_handle = tx.clone();
+        let shared = position.shared();
         let handle = tokio::spawn(async move {
             let mut playback_status = proxy_handle.receive_playback_status_changed().await;
-            let mut position = proxy_handle.receive_position_changed().await;
             let mut seeked = proxy_handle
                 .receive_seeked()
                 .await
@@ -77,45 +87,41 @@ impl Player {
                              * Some players automatically send PlaybackRate 0/1
                              * On start/stop, however, Some dont!
                              */
-                            match upd {
-                                PlaybackStatus::Playing => {
-                                    let _ = tx_handle.send(Update::PlaybackRate(1.0));
-                                }
-                                PlaybackStatus::Paused | PlaybackStatus::Stopped => {
-                                    let _ = tx_handle.send(Update::PlaybackRate(0.0));
-                                }
-                            }
+                            let playing = upd == PlaybackStatus::Playing;
+                            let player_rate = if playing { proxy_handle.rate().await.unwrap_or(1.0) } else { 0.0 };
+
+                            shared.set_pace(Some(playing), playing.then_some(player_rate));
+                            let _ = tx_handle.send(Update::PlaybackRate(player_rate));
                             let _ = tx_handle.send(Update::PlaybackStatus(upd));
+
+                            // Where it is is exactly known when it starts or stops
+                            let shared = shared.clone();
+                            tokio::spawn(async move { shared.read().await });
                         }
                     },
-                    // Position
-                    Some(change) = position.next() => {
-                        if let Ok(data) = change.get().await {
-                            #[allow(clippy::cast_sign_loss)]
-                            let dur = Duration::from_micros(data as u64);
-                            let _ = tx_handle.send(Update::Position(dur));
-                        }
-                    }
                     // Position (Seeked)
                     Some(change) = seeked.next() => {
                         let Ok(args) = change.args() else {
                             continue;
                         };
 
-                        #[allow(clippy::cast_sign_loss)]
-                        let dur = Duration::from_micros(args.value as u64);
-                        let _ = tx_handle.send(Update::Position(dur));
+                        shared.set(Duration::from_micros(u64::try_from(args.value).unwrap_or(0)));
                     }
                     // Playback Rate
                     Some(change) = rate.next() => {
                         if let Ok(data) = change.get().await {
+                            shared.set_pace(None, Some(data));
                             let _ = tx_handle.send(Update::PlaybackRate(data));
                         }
                     }
                     // Metadata
                     Some(change) = metadata.next() => {
                         if let Ok(data) = change.get().await {
-                            let _ = tx_handle.send(Update::Metadata(Metadata::from(data)));
+                            let data = Metadata::from(data);
+
+                            // Another track starts from the start, which the player doesn't say
+                            shared.metadata_changed(track_of(&data), data.length);
+                            let _ = tx_handle.send(Update::Metadata(data));
                         }
                     }
                     // Loop Status (None/Track/Playlist)
@@ -143,8 +149,6 @@ impl Player {
             }
         });
 
-        let position = Position::new(proxy.clone(), tx.subscribe(), tx.clone()).await?;
-
         Ok(Self {
             name,
             proxy,
@@ -170,7 +174,7 @@ impl Player {
 
     /// The (estimated) current position of the player.
     pub async fn get_position(&self) -> Duration {
-        self.position.get_position().await
+        self.position.get_position()
     }
 
     /// This method is called from `Mpris` to request updated information when a player
@@ -202,12 +206,18 @@ impl Player {
             let _ = self.tx.send(Update::Volume(volume));
         }
 
+        let shared = self.position.shared();
+
         if let Ok(metadata) = self.proxy.metadata().await {
-            let _ = self.tx.send(Update::Metadata(Metadata::from(metadata)));
+            let metadata = Metadata::from(metadata);
+
+            shared.metadata_changed(track_of(&metadata), metadata.length);
+            let _ = self.tx.send(Update::Metadata(metadata));
         }
 
-        let position = self.position.get_position().await;
-        let _ = self.tx.send(Update::Position(position));
+        // What the player says, or what is believed if it doesn't say
+        shared.read().await;
+        shared.announce();
         Ok(())
     }
 
@@ -293,26 +303,60 @@ impl Player {
             SeekDirection::Backwards => -micros,
         };
 
-        if self.proxy.can_seek().await? {
-            Ok(self.proxy.seek(micros).await?)
-        } else {
-            Err(crate::Error::MissingCapability)
+        if !self.proxy.can_seek().await? {
+            return Err(crate::Error::MissingCapability);
         }
+
+        self.proxy.seek(micros).await?;
+
+        // Not every player says that it was seeked
+        let shared = self.position.shared();
+        let current = shared.current();
+        shared.set(match direction {
+            SeekDirection::Forwards => current.saturating_add(duration),
+            SeekDirection::Backwards => current.saturating_sub(duration),
+        });
+
+        Ok(())
     }
 
     /// Seeks to an absolute position.
+    ///
+    /// This is a position the player is told, not one worked out from where it is believed to be
+    /// (which is a little behind by the time the player hears it). Players that can't be told
+    /// are told how far to go from where they are believed to be instead.
     ///
     /// # Errors
     /// Errors when the player can't seek, the duration is too long to be
     /// sent over dbus, or the dbus call fails.
     pub async fn set_position(&self, duration: Duration) -> crate::Result<()> {
-        let current = self.position.get_position().await;
+        let micros = i64::try_from(duration.as_micros())
+            .map_err(|_| crate::Error::InvalidDuration(duration))?;
 
-        if duration >= current {
-            self.seek(duration - current, SeekDirection::Forwards).await
-        } else {
-            self.seek(current - duration, SeekDirection::Backwards).await
+        if !self.proxy.can_seek().await? {
+            return Err(crate::Error::MissingCapability);
         }
+
+        let shared = self.position.shared();
+        let track = self.proxy.metadata().await.ok().map(Metadata::from).and_then(|metadata| metadata.track_id);
+
+        let told = match track.as_deref().filter(|track| *track != NO_TRACK).map(ObjectPath::try_from) {
+            Some(Ok(track)) => self.proxy.set_position(&track, micros).await.is_ok(),
+            _ => false,
+        };
+
+        if !told {
+            let current = shared.current();
+
+            if duration >= current {
+                self.seek(duration - current, SeekDirection::Forwards).await?;
+            } else {
+                self.seek(current - duration, SeekDirection::Backwards).await?;
+            }
+        }
+
+        shared.set(duration);
+        Ok(())
     }
 
     /// # Errors

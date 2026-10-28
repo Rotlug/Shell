@@ -78,9 +78,10 @@ fn default_mpris_player() -> gtk::Box {
                 };
 
                 let new_status = match player.loop_status {
-                    LoopStatus::None => LoopStatus::Playlist,
-                    LoopStatus::Playlist => LoopStatus::Track,
-                    LoopStatus::Track => LoopStatus::None,
+                    Some(LoopStatus::None) => LoopStatus::Playlist,
+                    Some(LoopStatus::Playlist) => LoopStatus::Track,
+                    Some(LoopStatus::Track) => LoopStatus::None,
+                    None => return warn!("The MPRIS player has no loop status to change"),
                 };
                 
                 mpris::set_loop_status(new_status);
@@ -96,9 +97,11 @@ fn default_mpris_player() -> gtk::Box {
                     return warn!("No MPRIS player available to toggle shuffle");
                 };
 
-                let new_shuffle = !player.shuffle;
-                
-                mpris::set_shuffle(new_shuffle);
+                let Some(shuffle) = player.shuffle else {
+                    return warn!("The MPRIS player has no shuffle to toggle");
+                };
+
+                mpris::set_shuffle(!shuffle);
             }
         },
 
@@ -224,14 +227,17 @@ fn default_mpris_player() -> gtk::Box {
                 let is_playing = default_player.playback_status == PlaybackStatus::Playing;
                 play_pause_button.set_label(if is_playing { "pause" } else { "play_arrow" });
 
-                if default_player.shuffle {
+                // Players that don't have a shuffle (browsers, for one) can't be told to shuffle
+                shuffle_button.set_sensitive(default_player.shuffle.is_some());
+                if default_player.shuffle == Some(true) {
                     shuffle_button.set_css_classes(&["bar-mpris-button", "toggled"]);
                 } else {
                     shuffle_button.set_css_classes(&["bar-mpris-button"]);
                 }
 
-                loop_button.set_label(if default_player.loop_status == LoopStatus::Track {"repeat_one"} else {"repeat"});
-                if default_player.loop_status != LoopStatus::None {
+                loop_button.set_sensitive(default_player.loop_status.is_some());
+                loop_button.set_label(if default_player.loop_status == Some(LoopStatus::Track) {"repeat_one"} else {"repeat"});
+                if default_player.loop_status.is_some_and(|status| status != LoopStatus::None) {
                     loop_button.set_css_classes(&["bar-mpris-button", "toggled"]);
                 } else {
                     loop_button.set_css_classes(&["bar-mpris-button"]);

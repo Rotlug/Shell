@@ -74,6 +74,8 @@ impl FromStr for LoopStatus {
 /* Metadata */
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Metadata {
+    /// What identifies the track for the player (an object path), `SetPosition` needs it
+    pub track_id: Option<String>,
     pub title: Option<String>,
     pub artists: Vec<String>,
     pub album: Option<String>,
@@ -113,7 +115,16 @@ impl From<HashMap<String, zvariant::OwnedValue>> for Metadata {
             })
             .map(Duration::from_micros);
 
+        // Most players send an object path, but some send a plain string
+        let track_id = value.get("mpris:trackid").and_then(|v| {
+            v.downcast_ref::<zvariant::ObjectPath>()
+                .map(|path| path.to_string())
+                .or_else(|_| v.downcast_ref::<String>())
+                .ok()
+        });
+
         Self {
+            track_id,
             title: string("xesam:title"),
             artists,
             album: string("xesam:album"),

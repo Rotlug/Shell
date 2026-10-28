@@ -150,16 +150,25 @@ impl ProgressBar {
             #[weak] drawing_area,
             move |_, _, _| {
                 if *primary_held.borrow() {
-                                        let Some(seek_pos) = *seek_position.borrow() else {
+                    let Some(seek_pos) = *seek_position.borrow() else {
                         return;
                     };
 
+                    // Nowhere to seek to in a track without a length
+                    let track_length = *duration.borrow();
+                    if track_length <= 0.0 {
+                        *seek_position.borrow_mut() = None;
+                        *primary_held.borrow_mut() = false;
+                        return;
+                    }
+
                     let alloc = drawing_area.allocation();
-                    let rel_x = ((seek_pos / *duration.borrow()) * alloc.width() as f64).clamp(0.0, alloc.width() as f64);
-                    let old_pos = *position.borrow();
-                    let new_pos = (rel_x / alloc.width() as f64) * (*duration.borrow());
-                    let delta = new_pos - old_pos;
-                    mpris::seek(delta as i64);
+                    let rel_x = ((seek_pos / track_length) * alloc.width() as f64).clamp(0.0, alloc.width() as f64);
+                    let new_pos = (rel_x / alloc.width() as f64) * track_length;
+
+                    // Where to go, not how far to go from where we think it is: that is a little
+                    // behind, and different every time
+                    mpris::set_position(new_pos as i64);
 
                     *position.borrow_mut() = new_pos;
                     *seek_position.borrow_mut() = None;

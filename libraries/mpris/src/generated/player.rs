@@ -104,7 +104,8 @@ pub trait Player {
     fn playback_status(&self) -> zbus::Result<String>;
 
     /// Position property
-    #[zbus(property)]
+    // The spec says that no signal is sent when it changes, so it can only be read, not cached
+    #[zbus(property(emits_changed_signal = "false"))]
     fn position(&self) -> zbus::Result<i64>;
 
     /// Rate property
