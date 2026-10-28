@@ -1,3 +1,4 @@
+pub mod dominant;
 pub mod models;
 
 /// How far apart two floating point components can be and still be the same color

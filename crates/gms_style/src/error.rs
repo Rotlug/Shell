@@ -13,9 +13,6 @@ pub enum Error {
 
     #[error("sass failed:\n{0}")]
     Sass(String),
-
-    #[error("Failed to watch the styles: {0}")]
-    Watch(#[from] notify::Error),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

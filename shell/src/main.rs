@@ -133,7 +133,6 @@ async fn start_shell() -> Application {
     }
 
     scss::bundle_apply_scss();
-    scss::watch_scss();
 
     services::activate_all().await;
 

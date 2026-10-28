@@ -132,7 +132,24 @@
     .audio-stream-root {
         background: $background-color-tertiary;
         padding: 8px;
-        
+
+        // Every row (a stream, a recorder, a monitor) has an accent color of its own, in the
+        // order they came
+        @for $i from 1 through length($accents) {
+            &.accent-#{$i - 1} {
+                $accent: nth($accents, $i);
+
+                .audio-stream-volume {
+                    color: $accent;
+                }
+
+                .audio-stream-volume-slider highlight,
+                .audio-stream-volume-slider:hover highlight {
+                    background-color: $accent;
+                }
+            }
+        }
+
         .audio-stream-mute-button {
             @include material-icons;
 

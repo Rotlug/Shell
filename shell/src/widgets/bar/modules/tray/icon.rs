@@ -47,8 +47,5 @@ fn pixmap_to_pixbuf(width: i32, height: i32, pixels: &[u8]) -> Option<gtk::gdk_p
         pixbuf
     };
 
-    // aesthetic thing
-    pixbuf.saturate_and_pixelate(&pixbuf, 0.0, false);
-
     Some(pixbuf)
 }

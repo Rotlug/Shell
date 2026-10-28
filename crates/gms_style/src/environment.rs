@@ -1,7 +1,5 @@
 //! Looks for the `GMS_*` environment variables, which set the colors and font.
-use std::{fs, path::Path};
-
-use crate::{DEFAULT_STYLES, Result};
+use crate::DEFAULT_STYLES;
 
 /// Base16 slot names (`base00`..`base0F`), in the same order the nix flake's
 /// `style.nix` defines them.
@@ -97,73 +95,21 @@ fn override_fonts(user_scss: &str, font: &str) -> String {
     }).collect::<Vec<_>>().join("\n") + "\n"
 }
 
-/// What `_user.scss` should be according to the environment, if the environment has an
-/// opinion: a palette and/or a font. When only the font is set, the rest comes from the bundled
-/// default.
-fn user_styles_from_env() -> Option<String> {
-    let base16 = base16_from_env();
-    let font = font_from_env();
-
-    if base16.is_none() && font.is_none() {
-        return None;
-    }
-
-    let mut user_scss = base16.as_ref().map_or_else(
+/// The `_user.scss` to compile the styles with: the palette from the environment (or the
+/// bundled one), with the font from the environment (or the bundled one).
+pub fn user_styles() -> String {
+    let mut user_scss = base16_from_env().as_ref().map_or_else(
         || DEFAULT_STYLES.iter()
             .find(|(rel_path, _)| *rel_path == USER_STYLES)
             .map_or_else(String::new, |(_, content)| (*content).to_owned()),
         generate_base16_user_scss,
     );
 
-    if let Some(font) = &font {
-        user_scss = override_fonts(&user_scss, font);
+    if let Some(font) = font_from_env() {
+        user_scss = override_fonts(&user_scss, &font);
     }
 
-    Some(user_scss)
-}
-
-/// Writes `content` to `path`, unless it has that content already. Anything watching the file
-/// doesn't need to hear about it every time an app starts.
-fn write_if_changed(path: &Path, content: &str) -> Result<()> {
-    if fs::read_to_string(path).is_ok_and(|existing| existing == content) {
-        return Ok(());
-    }
-
-    // Written elsewhere first, so that nobody reads half of it
-    let temporary = path.with_extension("scss.tmp");
-    fs::write(&temporary, content)?;
-    fs::rename(&temporary, path)?;
-
-    Ok(())
-}
-
-/// Writes the stylesheet that isn't there yet to `styles`, and `_user.scss` according to the
-/// environment.
-pub fn write_default_styles(styles: &Path) -> Result<()> {
-    fs::create_dir_all(styles)?;
-
-    let user_styles = user_styles_from_env();
-    if let Some(user_styles) = &user_styles {
-        write_if_changed(&styles.join(USER_STYLES), user_styles)?;
-    }
-
-    for (rel_path, content) in DEFAULT_STYLES {
-        if user_styles.is_some() && *rel_path == USER_STYLES {
-            continue;
-        }
-
-        let path = styles.join(rel_path);
-
-        if !path.exists() {
-            if let Some(parent) = path.parent() {
-                fs::create_dir_all(parent)?;
-            }
-
-            fs::write(&path, content)?;
-        }
-    }
-
-    Ok(())
+    user_scss
 }
 
 #[cfg(test)]
@@ -189,24 +135,5 @@ mod tests {
         assert!(scss.contains("$background-color-primary: #000000;"));
         assert!(scss.contains("$foreground-color-primary: #000005;"));
         assert!(scss.contains("$accent-brown: #00000f;"));
-    }
-
-    #[test]
-    fn only_writes_what_changed() {
-        let dir = std::env::temp_dir().join(format!("gms_style_write_{}", std::process::id()));
-        fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("_user.scss");
-
-        write_if_changed(&path, "a").unwrap();
-        let first = fs::metadata(&path).unwrap().modified().unwrap();
-
-        std::thread::sleep(std::time::Duration::from_millis(20));
-        write_if_changed(&path, "a").unwrap();
-        assert_eq!(fs::metadata(&path).unwrap().modified().unwrap(), first);
-
-        write_if_changed(&path, "b").unwrap();
-        assert_eq!(fs::read_to_string(&path).unwrap(), "b");
-
-        fs::remove_dir_all(dir).unwrap();
     }
 }

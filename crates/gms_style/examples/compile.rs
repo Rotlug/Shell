@@ -1,5 +1,5 @@
 //! Compiles a stylesheet (`main` unless told otherwise) and says how it went:
-//! `HOME=$(mktemp -d) cargo run --example compile [entry]`
+//! `cargo run --example compile [entry]`
 use std::time::Instant;
 
 fn main() {

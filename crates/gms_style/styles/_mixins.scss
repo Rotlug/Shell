@@ -1,3 +1,17 @@
+// The colors of a base16 palette that are not shades (base08 to base0F), which `_user.scss`
+// has when it comes from one. Without them everything keeps to the foreground color.
+$accent-red: $foreground-color-primary !default;
+$accent-orange: $foreground-color-primary !default;
+$accent-yellow: $foreground-color-primary !default;
+$accent-green: $foreground-color-primary !default;
+$accent-cyan: $foreground-color-primary !default;
+$accent-blue: $foreground-color-primary !default;
+$accent-magenta: $foreground-color-primary !default;
+$accent-brown: $foreground-color-primary !default;
+
+// In the order things cycle through them
+$accents: $accent-red, $accent-orange, $accent-yellow, $accent-green, $accent-cyan, $accent-blue, $accent-magenta, $accent-brown;
+
 @import "user.scss";
 
 @mixin material-icons {

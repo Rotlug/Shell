@@ -105,8 +105,7 @@ fn main() -> glib::ExitCode {
 
     // The theme needs GTK to be ready, which it is once the application starts
     application.connect_startup(|_| {
-        // Lives as long as the application does
-        std::mem::forget(gms_ui::style::load("session"));
+        gms_ui::style::load("session");
     });
     application.connect_activate(activate);
 

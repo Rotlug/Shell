@@ -3,7 +3,7 @@
 //!
 //! The rows are styled by the `audio-stream-*` styles, anything that holds them needs to
 //! have `audio-tab-root` among its classes (see the brightness tab).
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use gtk::prelude::*;
 
@@ -13,9 +13,13 @@ use super::dot_separator;
 /// How much scrolling over a slider by one notch moves it, from 0.0 to 1.0
 const SCROLL_STEP: f64 = 0.05;
 
+/// How many accent colors the styles have (`accent-0` to `accent-7`: base08 to base0F)
+const ACCENT_COUNT: usize = 8;
+
 /// A row with a title (a description, a dot, a name), a slider, and what the slider is at.
 pub struct SliderRow {
     pub root: gtk::Box,
+    accent: Cell<Option<usize>>,
     description_label: gtk::Label,
     name_label: gtk::Label,
     value_label: gtk::Label,
@@ -109,6 +113,7 @@ impl SliderRow {
 
         Self {
             root,
+            accent: Cell::new(None),
             description_label,
             name_label,
             value_label,
@@ -122,6 +127,18 @@ impl SliderRow {
         self.description_label.set_label(description);
         self.name_label.set_label(name);
         self.set_value(value);
+    }
+
+    /// Gives the row the accent color the `index`th of the colors of the palette, going around
+    /// when there are more rows than colors. The styles do the rest.
+    pub fn set_accent(&self, index: usize) {
+        let index = index % ACCENT_COUNT;
+
+        if let Some(old) = self.accent.replace(Some(index)) {
+            self.root.remove_css_class(&format!("accent-{old}"));
+        }
+
+        self.root.add_css_class(&format!("accent-{index}"));
     }
 
     pub fn set_value(&self, value: f64) {
@@ -141,6 +158,8 @@ fn format_percentage(value: f64) -> String {
 pub struct SliderList {
     pub root: gtk::ScrolledWindow,
     rows: gtk::Box,
+    /// How many rows were added so far, which decides the accent color of the next one
+    added: Cell<usize>,
 }
 
 impl Default for SliderList {
@@ -155,16 +174,25 @@ impl Default for SliderList {
         root.set_vexpand(true);
         root.set_min_content_height(100);
 
-        Self { root, rows }
+        Self { root, rows, added: Cell::new(0) }
     }
 }
 
 impl SliderList {
+    /// Rows get their accent color in the order they are added, and keep it for as long as
+    /// they live: the ones that stay don't change color when others come and go.
+    fn assign_accent(&self, row: &SliderRow) {
+        row.set_accent(self.added.get());
+        self.added.set(self.added.get() + 1);
+    }
+
     pub fn append(&self, row: &SliderRow) {
+        self.assign_accent(row);
         self.rows.append(&row.root);
     }
 
     pub fn prepend(&self, row: &SliderRow) {
+        self.assign_accent(row);
         self.rows.prepend(&row.root);
     }
 

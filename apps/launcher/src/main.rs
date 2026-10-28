@@ -49,8 +49,7 @@ fn main() -> ExitCode {
 
     // The theme needs GTK to be ready, which it is once the application starts
     application.connect_startup(|_| {
-        // Lives as long as the application does
-        std::mem::forget(gms_ui::style::load("launcher"));
+        gms_ui::style::load("launcher");
     });
 
     application.connect_activate(clone!(

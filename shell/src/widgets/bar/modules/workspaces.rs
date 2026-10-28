@@ -11,6 +11,8 @@ const WORKSPACE_WIDTH: f64 = 13.0;
 const WORKSPACE_HEIGHT: f64 = 13.0;
 const WORKSPACE_Y: f64 = 5.0;
 const WORKSPACE_PADDING: f64 = 1.0;
+/// How visible the color of a workspace without windows is, from 0.0 to 1.0
+const EMPTY_WORKSPACE_ALPHA: f64 = 0.3;
 
 static WORKSPACE_MASK: LazyLock<Mutex<WorkspaceMask>> = LazyLock::new(|| Mutex::new(WorkspaceMask::default()));
 
@@ -75,18 +77,23 @@ pub fn new() -> BarModule {
                     // draw workspace squares
                     for i in 0..SHOWN_WORKSPACES+1 {
                         let workspace_x = (i as f64 - 1.0).mul_add(WORKSPACE_WIDTH + WORKSPACE_PADDING, WORKSPACE_PADDING);
-                        let color_variable_name = if WORKSPACE_MASK.lock().unwrap().mask & (1 << i) != 0 {
-                            "foreground-color-primary"
-                        } else {
-                            "foreground-color-quinary"
-                        };
+                        let occupied = WORKSPACE_MASK.lock().unwrap().mask & (1 << i) != 0;
 
-                        if let Some(color) = scss::get_color(color_variable_name) {
+                        // Every workspace has a color of its own, empty ones are a dim version of it
+                        let color = scss::accent_color(i.saturating_sub(1))
+                            .map(|accent| (accent, if occupied { 1.0 } else { EMPTY_WORKSPACE_ALPHA }))
+                            .or_else(|| scss::get_color(if occupied {
+                                "foreground-color-primary"
+                            } else {
+                                "foreground-color-quinary"
+                            }).map(|color| (color, 1.0)));
+
+                        if let Some((color, strength)) = color {
                             cr.set_source_rgba(
                                 color.red as f64 / 255.0,
                                 color.green as f64 / 255.0,
                                 color.blue as f64 / 255.0,
-                                color.alpha as f64 / 255.0
+                                color.alpha as f64 / 255.0 * strength
                             );
 
                             cr.rectangle(
@@ -100,8 +107,10 @@ pub fn new() -> BarModule {
                         }
                     }
 
-                    // draw active workspace
-                    if let Some(color) = scss::get_color("foreground-color-primary") {
+                    // draw active workspace, in the color of the workspace it is on (or closest to,
+                    // while it moves)
+                    let active_slot = (active_ws.round().max(1.0) as usize) - 1;
+                    if let Some(color) = scss::accent_color(active_slot).or_else(|| scss::get_color("foreground-color-primary")) {
                         let active_workspace_x = (active_ws - 1.0).mul_add(WORKSPACE_WIDTH + WORKSPACE_PADDING, WORKSPACE_PADDING) + 1.0;
 
                         cr.set_source_rgba(

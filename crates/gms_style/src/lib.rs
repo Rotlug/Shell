@@ -3,7 +3,7 @@ use std::{
     collections::HashMap,
     fs,
     hash::{DefaultHasher, Hash as _, Hasher as _},
-    path::{Path, PathBuf},
+    path::Path,
     process::Command,
     sync::{LazyLock, Mutex},
 };
@@ -12,7 +12,6 @@ use color::{
     is_valid_hex_color,
     models::{ColorModel as _, Rgba},
 };
-use notify::{EventKind, Watcher as _, event::{AccessKind, AccessMode}};
 use regex::Regex;
 
 include!(concat!(env!("OUT_DIR"), "/default_styles.rs"));
@@ -22,7 +21,9 @@ mod error;
 mod paths;
 
 pub use error::{Error, Result};
-pub use paths::styles_directory;
+
+/// The stylesheet that holds the colors and fonts, which the environment replaces
+const USER_STYLES: &str = "_user.scss";
 
 const VAR_REGEX: &str = r#"^\$([a-zA-Z0-9_-]+):\s*(?:"?([^"]+)"?|([a-zA-Z0-9#() ,.-])+);$"#;
 
@@ -53,31 +54,29 @@ fn refresh_colors(user_styles: &str) {
     *COLORS.lock().unwrap() = colors;
 }
 
-/// Compiles a stylesheet into CSS for GTK, getting everything ready for that first:
-/// stylesheet that isn't in `~/.config/gray-meadows/styles` yet is put there, and `GMS_*`
-/// environment variables are applied.
+/// Compiles a stylesheet into CSS for GTK.
+///
+/// The stylesheet is part of the program, the only things that change it are the `GMS_*`
+/// environment variables (see the README).
 ///
 /// `entry` is the file that is compiled, without `.scss`: the shell has `main`, every app its
-/// own. That way, they only carry the styles they use, and new ones don't depend on an old
-/// `main.scss` that was copied before they existed.
+/// own. That way, they only carry the styles they use.
 ///
 /// This is quick when nothing changed since last time, the CSS is cached then.
 ///
 /// # Errors
-/// Errors when the styles can't be read or written, or when `sass` fails (or isn't there).
+/// Errors when the CSS can't be built, or when `sass` fails (or isn't there).
 pub fn compile(entry: &str) -> Result<String> {
-    let styles = styles_directory()?;
-    environment::write_default_styles(&styles)?;
+    let user_styles = environment::user_styles();
+    refresh_colors(&user_styles);
 
-    refresh_colors(&fs::read_to_string(styles.join("_user.scss")).unwrap_or_default());
-
-    let cache = paths::cache_directory()?.join(format!("style-{entry}-{:016x}.css", hash_sources(&styles)?));
+    let cache = paths::cache_directory()?.join(format!("style-{entry}-{:016x}.css", hash_sources(&user_styles)));
 
     if let Ok(css) = fs::read_to_string(&cache) {
         return Ok(css);
     }
 
-    let css = run_sass(&styles, entry)?;
+    let css = run_sass(&user_styles, entry)?;
 
     if let Err(error) = store_in_cache(&cache, entry, &css) {
         // Nothing wrong with the CSS, it's just not going to be quick the next time
@@ -87,7 +86,33 @@ pub fn compile(entry: &str) -> Result<String> {
     Ok(css)
 }
 
-fn run_sass(styles: &Path, entry: &str) -> Result<String> {
+/// `sass` reads files, so the stylesheet is put in a directory of its own for it for as long
+/// as it takes.
+fn run_sass(user_styles: &str, entry: &str) -> Result<String> {
+    let dir = paths::cache_directory()?.join(format!("build-{}", std::process::id()));
+    let result = write_sources(&dir, user_styles).and_then(|()| sass(&dir, entry));
+
+    // Nothing in there is of any use afterwards
+    let _ = fs::remove_dir_all(&dir);
+
+    result
+}
+
+fn write_sources(dir: &Path, user_styles: &str) -> Result<()> {
+    for (rel_path, content) in DEFAULT_STYLES {
+        let path = dir.join(rel_path);
+
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+
+        fs::write(&path, if *rel_path == USER_STYLES { user_styles } else { content })?;
+    }
+
+    Ok(())
+}
+
+fn sass(styles: &Path, entry: &str) -> Result<String> {
     let output = Command::new("sass")
         .arg("-I")
         .arg(styles)
@@ -102,34 +127,19 @@ fn run_sass(styles: &Path, entry: &str) -> Result<String> {
     }
 }
 
-/// Every `.scss` file under `dir`, in a fixed order
-fn scss_files(dir: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
-    for entry in fs::read_dir(dir)? {
-        let path = entry?.path();
+/// Identifies what the stylesheet is made of: if it is the same as before, so is the CSS.
+fn hash_sources(user_styles: &str) -> u64 {
+    let mut hasher = DefaultHasher::new();
 
-        if path.is_dir() {
-            scss_files(&path, files)?;
-        } else if path.extension().is_some_and(|extension| extension == "scss") {
-            files.push(path);
+    for (rel_path, content) in DEFAULT_STYLES {
+        rel_path.hash(&mut hasher);
+        if *rel_path != USER_STYLES {
+            content.hash(&mut hasher);
         }
     }
 
-    files.sort();
-    Ok(())
-}
-
-/// Identifies what the stylesheet is made of: if it is the same as before, so is the CSS.
-fn hash_sources(styles: &Path) -> Result<u64> {
-    let mut files = Vec::new();
-    scss_files(styles, &mut files)?;
-
-    let mut hasher = DefaultHasher::new();
-    for file in files {
-        file.strip_prefix(styles).unwrap_or(&file).hash(&mut hasher);
-        fs::read(&file)?.hash(&mut hasher);
-    }
-
-    Ok(hasher.finish())
+    user_styles.hash(&mut hasher);
+    hasher.finish()
 }
 
 fn store_in_cache(cache: &Path, entry: &str, css: &str) -> std::io::Result<()> {
@@ -157,36 +167,6 @@ fn store_in_cache(cache: &Path, entry: &str, css: &str) -> std::io::Result<()> {
     Ok(())
 }
 
-/// Keeps watching the styles for as long as it is alive.
-pub struct Watcher {
-    _watcher: notify::RecommendedWatcher,
-}
-
-/// Calls `on_change` (from another thread) whenever a stylesheet is edited, so that the
-/// styles can be compiled again.
-///
-/// # Errors
-/// Errors when the styles can't be watched.
-pub fn watch(on_change: impl Fn() + Send + 'static) -> Result<Watcher> {
-    let styles = styles_directory()?;
-    fs::create_dir_all(&styles)?;
-
-    let mut watcher = notify::recommended_watcher(move |event: notify::Result<notify::Event>| match event {
-        // Access(Close(Write)) means that the file is done being written to
-        Ok(event) => if event.paths.iter().any(|path| path.extension().is_some_and(|extension| extension == "scss"))
-            && matches!(event.kind, EventKind::Access(AccessKind::Close(AccessMode::Write)))
-        {
-            on_change();
-        },
-        Err(error) => tracing::error!(%error, "Error watching the styles"),
-    })?;
-
-    watcher.watch(&styles, notify::RecursiveMode::Recursive)?;
-    tracing::info!(styles = %styles.display(), "Watching the styles");
-
-    Ok(Watcher { _watcher: watcher })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -202,24 +182,28 @@ mod tests {
     }
 
     #[test]
-    fn the_hash_follows_the_content() {
-        let dir = std::env::temp_dir().join(format!("gms_style_hash_{}", std::process::id()));
-        fs::create_dir_all(dir.join("sub")).unwrap();
-        fs::write(dir.join("main.scss"), "a").unwrap();
-        fs::write(dir.join("sub/_b.scss"), "b").unwrap();
-
-        let before = hash_sources(&dir).unwrap();
-        assert_eq!(hash_sources(&dir).unwrap(), before);
-
-        fs::write(dir.join("sub/_b.scss"), "c").unwrap();
-        assert_ne!(hash_sources(&dir).unwrap(), before);
-
-        fs::remove_dir_all(dir).unwrap();
+    fn the_hash_follows_the_user_styles() {
+        assert_eq!(hash_sources("a"), hash_sources("a"));
+        assert_ne!(hash_sources("a"), hash_sources("b"));
     }
 
     #[test]
     fn the_default_styles_are_bundled() {
         assert!(DEFAULT_STYLES.iter().any(|(path, _)| *path == "main.scss"));
-        assert!(DEFAULT_STYLES.iter().any(|(path, _)| *path == "_user.scss"));
+        assert!(DEFAULT_STYLES.iter().any(|(path, _)| *path == USER_STYLES));
+    }
+
+    #[test]
+    fn the_default_styles_compile() {
+        // Needs sass, like everything else that shows the styles
+        let dir = std::env::temp_dir().join(format!("gms_style_compile_{}", std::process::id()));
+
+        write_sources(&dir, &environment::user_styles()).unwrap();
+        for entry in ["main", "launcher", "session"] {
+            let css = sass(&dir, entry);
+            assert!(css.is_ok(), "{entry}: {css:?}");
+        }
+
+        fs::remove_dir_all(dir).unwrap();
     }
 }
