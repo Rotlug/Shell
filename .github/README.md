@@ -57,8 +57,7 @@ I express my deep gratitude to the following sponsors for their generous support
 ## 💡 Features
 
 - Bar with workspace management, music controls, system tray, system stats, volume, and more
-- OSD for notifications, volume and submaps
-- Clipboard manager powered by `cliphist` and `wl-clipboard`
+- OSD for volume
 - Apps of their own, that look like the shell and follow the same `GMS_*` environment variables:
   - `gms-launcher`: a generic launcher. It shows the entries it is given on stdin and prints the one that is picked, so what it launches is up to a script. [Examples](../apps/launcher/README.md) for an application picker and an emoji picker are included
   - `gms-session`: the logout selector (lock, log out, suspend, hibernate, reboot, shut down)
@@ -69,11 +68,6 @@ I express my deep gratitude to the following sponsors for their generous support
   - Calendar
   - Weather
   - Timers *(soon)*
-- Left sidebar:
-  - Google Translate integration
-  - Advanced color picker
-  - Integrated AI assistant powered by OpenAI/Gemini
-  - gpu-screen-recorder integration
 
 ## 🤔 Why the name "Gray Meadows"?
 grayscale color scheme, first screenshot of the agsv2 version used a foggy forest wallpaper. was too lazy to come up with a better name

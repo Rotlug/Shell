@@ -1,13 +1,12 @@
-#[macro_use(clone, closure_local)]
+#[macro_use(clone)]
 extern crate glib;
 #[macro_use(view)]
 extern crate relm4_macros;
-#[macro_use(debug, info, warn, error)]
+#[macro_use(warn, error)]
 extern crate tracing;
 #[macro_use]
 mod macros;
 
-mod ipc;
 mod services;
 mod widgets;
 mod utils;
@@ -24,8 +23,8 @@ use tracing::level_filters::LevelFilter;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::fmt::time::ChronoLocal;
 
-use self::widgets::{bar, windows::{self, GmsWindow}, notifications::NotificationsWindow};
-use self::utils::{display, process};
+use self::widgets::{windows::GmsWindow, notifications::NotificationsWindow};
+use self::utils::display;
 
 
 pub struct GrayMeadowsLocal {
@@ -64,7 +63,6 @@ pub static USERNAME: LazyLock<String> = LazyLock::new(|| {
 });
 
 fn activate(application: &Application) {
-    let keybinds_osd = widgets::osd::imp::keybinds::KeybindsOsd::default();
     let volume_osd = widgets::osd::imp::volume::VolumeOsd::default();
 
     for monitor in display::get_all_monitors(&gdk::Display::default().expect("Failed to get default display")) {
@@ -72,7 +70,6 @@ fn activate(application: &Application) {
         let osd = widgets::osd::OsdWindow::new(application, &monitor);
         let notifications_window = NotificationsWindow::new(application, &monitor);
 
-        osd.add_osd(&keybinds_osd);
         osd.add_osd(&volume_osd);
 
         bar.window.show();
@@ -90,15 +87,7 @@ fn activate(application: &Application) {
 
     APP_LOCAL.with(|app| {
         let mut windows = app.windows.borrow_mut();
-        windows.insert("left_sidebar".into(), Box::new(widgets::windows::sidebar_left::new(application)));
         windows.insert("right_sidebar".into(), Box::new(widgets::windows::sidebar_right::new(application)));
-
-        // optional features
-        if process::is_command_available("cliphist") && process::is_command_available("wl-copy") {
-            windows.insert("clipboard".into(), Box::new(widgets::windows::clipboard::new(application)));
-        } else {
-            warn!("cliphist or wl-copy not found, clipboard window will not be available");
-        }
     });
 }
 
@@ -111,32 +100,24 @@ async fn start_shell() -> Application {
         .with_timer(ChronoLocal::new("%H:%M:%S%.3f".to_owned()))
         .init();
 
-    // Ensure that another instance of gray-meadows-shell is not running.
-    // gray-meadows-shell can hold on to it's socket for a bit after exiting so we'll
-    // try multiple times, in case this is being restarted right after a SIGTERM
-    for i in 1..=5 {
-        if ipc::client::get_stream().is_ok() {
-            if i == 5 {
-                error!("Looks like another instance of gray-meadows-shell is already running.");
-                std::process::exit(1);
-            }
-
-            warn!("Socket is taken, waiting for it to be released... ({}{} attempt)",
-                i,
-                if i == 1 { "st" } else if i == 2 { "nd" } else if i == 3 { "rd" } else { "th" }
-            );
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-        }
-    }
-    
-    tokio::spawn(async {
-        if let Err(e) = ipc::server::start().await {
-            error!(%e, "Failed to start IPC server");
-            std::process::exit(1);
-        }
-    });
-
     let _ = gtk::init();
+
+    let application = Application::new(
+        Some("sn.inpr.gray_meadows_shell"),
+        Default::default(),
+    );
+
+    // Ensure that another instance of gray-meadows-shell is not running: the name of the
+    // application can only be owned by one of them
+    if let Err(e) = application.register(None::<&gio::Cancellable>) {
+        error!(%e, "Failed to register the application");
+        std::process::exit(1);
+    }
+
+    if application.is_remote() {
+        error!("Looks like another instance of gray-meadows-shell is already running.");
+        std::process::exit(1);
+    }
 
     gtk::style_context_add_provider_for_display(
         &gdk::Display::default().expect("Failed to get default display"),
@@ -155,34 +136,12 @@ async fn start_shell() -> Application {
     scss::watch_scss();
 
     services::activate_all().await;
-    windows::listen_for_ipc_messages();
-    bar::listen_for_ipc_messages();
-
-    let application = Application::new(
-        Some("sn.inpr.gray_meadows_shell"),
-        Default::default(),
-    );
 
     application.connect_activate(activate);
     application
 }
 
 fn main() {
-    let args: Vec<String> = std::env::args().collect();
-
-    // If no arguments are provided, assume that the user wants to run the shell.
-    // Otherwise, interpret the arguments as an IPC command.
-    if args.len() != 1 {
-        let command = args[1..].join(" ");
-
-        ipc::client::send_message(&command).map_or_else(
-            |err| eprintln!("Failed to send IPC command: {}", err),
-            |response| println!("{}", response)
-        );
-
-        return;
-    }
-
     let runtime = tokio::runtime::Runtime::new().expect("Failed to start the tokio runtime");
     let application = runtime.block_on(start_shell());
 

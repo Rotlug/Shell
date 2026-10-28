@@ -23,10 +23,6 @@ impl<T: Clone> BroadcastChannel<T> {
     pub async fn send(&self, value: T) {
         let _ = self.sender.broadcast(value).await;
     }
-    
-    pub fn send_blocking(&self, value: T) {
-        let _ = self.sender.broadcast_blocking(value);
-    }
 
     pub fn spawn_send(&self, value: T)
     where

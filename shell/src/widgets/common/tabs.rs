@@ -6,16 +6,14 @@ use crate::utils::gesture;
 
 pub enum TabSize {
     Tiny,
-    Normal,
-    Large
+    Normal
 }
 
 impl TabSize {
     pub fn to_class_name(&self) -> &'static str {
         match self {
             TabSize::Tiny => "tiny",
-            TabSize::Normal => "normal",
-            TabSize::Large => "large"
+            TabSize::Normal => "normal"
         }
     }
 }

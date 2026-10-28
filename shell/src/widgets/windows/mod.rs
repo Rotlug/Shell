@@ -1,13 +1,9 @@
 pub mod popup;
-pub mod fullscreen;
-pub mod sidebar_left;
 pub mod sidebar_right;
-pub mod clipboard;
 
 use std::any::Any;
 
 use crate::APP_LOCAL;
-use crate::ipc;
 
 pub trait GmsWindow: Any {
     fn show(&self);
@@ -41,9 +37,6 @@ where
     })
 }
 
-pub fn show(window: &str) {
-    with(window, |win| win.show());
-}
 
 pub fn hide(window: &str) {
     with(window, |win| win.hide());
@@ -63,30 +56,4 @@ pub fn hide_all_popups() {
     });
 }
 
-pub fn hide_all_fullscreen_windows() {
-    APP_LOCAL.with(|app| {
-        for window in app.windows.borrow().values() {
-            if window.downcast_ref::<fullscreen::FullscreenWindow>().is_some() {
-                window.hide();
-            }
-        }
-    });
-}
 
-pub fn listen_for_ipc_messages() {
-    ipc::listen_for_messages_local(|message| {
-        if let Some(window_name) = message.strip_prefix("show_") {
-            show(window_name);
-        } else if let Some(window_name) = message.strip_prefix("hide_") {
-            hide(window_name);
-        } else if let Some(window_name) = message.strip_prefix("toggle_") && toggle(window_name) {
-            match window_name {
-                "clipboard" => {
-                    let _ = ipc::client::send_message("update_clipboard_window_entries");
-                },
-
-                _ => {}
-            }
-        }
-    });
-}

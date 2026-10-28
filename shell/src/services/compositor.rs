@@ -1,10 +1,7 @@
 //! Compositor-neutral abstraction over Hyprland and niri.
 //!
 //! Widgets consume [`COMPOSITOR`] and the dispatch helpers below instead of
-//! talking to either compositor's IPC directly. `submap` is a Hyprland-only
-//! concept (keybind "grab" submap) and is simply never set on niri, which
-//! has no equivalent - consumers of it degrade gracefully (the keybinds OSD/
-//! quicktoggle just never activate under niri).
+//! talking to either compositor's IPC directly.
 use std::sync::LazyLock;
 use futures_signals::signal::Mutable;
 use gdk::prelude::MonitorExt as _;
@@ -34,8 +31,6 @@ pub struct Compositor {
     pub active_client: Mutable<Option<CompositorClient>>,
     pub active_workspace: Mutable<Option<CompositorWorkspace>>,
     pub workspaces: Mutable<Option<Vec<CompositorWorkspace>>>,
-    /// Hyprland-only: the active keybind submap, if any non-default one is active.
-    pub submap: Mutable<Option<String>>,
 }
 
 pub static COMPOSITOR: LazyLock<Compositor> = LazyLock::new(Compositor::default);
@@ -145,18 +140,10 @@ fn refresh_hypr_workspaces() {
     }));
 }
 
-fn refresh_hypr_submap(new_submap: Option<String>) {
-    if let Some(submap) = new_submap {
-        COMPOSITOR.submap.set((!submap.is_empty() && submap != "default").then_some(submap));
-    } else if let Some(submap) = super::hyprland::call_hyprctl("submap") {
-        COMPOSITOR.submap.set((!submap.is_empty() && submap != "default").then_some(submap));
-    }
-}
 
 fn activate_hyprland() {
     refresh_hypr_active_workspace();
     refresh_hypr_workspaces();
-    refresh_hypr_submap(None);
 
     tokio::spawn(async move {
         let mut event_listener = AsyncEventListener::new();
@@ -172,7 +159,6 @@ fn activate_hyprland() {
         event_listener.add_workspace_moved_handler(|_| Box::pin(async { refresh_hypr_workspaces() }));
         event_listener.add_workspace_changed_handler(|_| Box::pin(async { refresh_hypr_active_workspace() }));
         event_listener.add_active_monitor_changed_handler(|_| Box::pin(async { refresh_hypr_active_workspace() }));
-        event_listener.add_sub_map_changed_handler(|new_submap| Box::pin(async { refresh_hypr_submap(Some(new_submap)) }));
 
         let _ = event_listener.start_listener_async().await;
     });

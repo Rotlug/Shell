@@ -128,13 +128,7 @@ pub fn play_pause() {
     control("toggle play/pause", |p| async move { p.play_pause().await });
 }
 
-pub fn play() {
-    control("play", |p| async move { p.play().await });
-}
 
-pub fn pause() {
-    control("pause", |p| async move { p.pause().await });
-}
 
 pub fn next() {
     control("skip to next track", |p| async move { p.next().await });
@@ -189,17 +183,5 @@ pub async fn activate() {
                 Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
             }
         }
-    });
-
-    // Monitor IPC commands for controlling MPRIS players
-    crate::ipc::listen_for_messages_local(|message| match message.as_str() {
-        "mpris_next" => next(),
-        "mpris_previous" => previous(),
-        "mpris_play_pause" => play_pause(),
-        "mpris_play" => play(),
-        "mpris_pause" => pause(),
-        "mpris_volume_up" => adjust_volume(0.05),
-        "mpris_volume_down" => adjust_volume(-0.05),
-        _ => {},
     });
 }

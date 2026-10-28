@@ -1367,9 +1367,7 @@ dependencies = [
 name = "gray-meadows-shell"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "async-broadcast",
- "async-channel",
  "brightness",
  "cairo-rs",
  "chrono",
@@ -1393,7 +1391,6 @@ dependencies = [
  "network_manager",
  "niri-ipc",
  "notif_daemon",
- "notify",
  "num-traits",
  "power_profiles",
  "regex",

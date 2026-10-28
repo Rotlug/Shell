@@ -7,7 +7,6 @@ pub mod tray;
 pub mod wireplumber;
 pub mod notifications;
 pub mod networkmanager;
-pub mod clipboard;
 pub mod idle_inhibitor;
 pub mod power_profiles;
 pub mod brightness;
@@ -22,7 +21,6 @@ pub async fn activate_all() {
     wireplumber::activate();
     notifications::activate().await;
     networkmanager::activate().await;
-    clipboard::activate();
     power_profiles::activate().await;
     brightness::activate();
     discord::activate();

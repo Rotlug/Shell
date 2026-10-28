@@ -23,7 +23,7 @@ fn parse_uptime_seconds(seconds: u64) -> String {
 }
 
 fn format_uptime_seconds(uptime: u64) -> String {
-    format!("  up: {}", parse_uptime_seconds(uptime))
+    format!("up: {}", parse_uptime_seconds(uptime))
 }
 
 fn get_uptime_label_text(uptime: Option<u64>) -> String {

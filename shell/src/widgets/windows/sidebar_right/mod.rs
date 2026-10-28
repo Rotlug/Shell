@@ -22,7 +22,6 @@ pub fn new(application: &libadwaita::Application) -> PopupWindow {
             set_vexpand: false,
 
             append: &quicktoggle::notifications::new(),
-            append: &quicktoggle::keybinds::new(),
             append: &quicktoggle::gamemode::new(),
             append: &quicktoggle::idle_inhibitor::new(),
         },

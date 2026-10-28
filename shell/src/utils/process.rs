@@ -33,31 +33,8 @@ fn detach_child() {
     }
 }
 
-pub fn is_command_available(command: &str) -> bool {
-    let paths = ["/bin", "/usr/bin", "/usr/local/bin"];
-    for path in paths {
-        let full_path = Path::new(path).join(command);
-        if full_path.exists() && full_path.is_file() {
-            return true;
-        }
-    }
 
-    false
-}
 
-pub fn kill_task_if_any(command: &str) {
-    let _ = std::process::Command::new("pkill")
-        .arg("-f")
-        .arg(command)
-        .output();
-}
-
-pub fn send_signal(pid: u32, signal: &str) {
-    let _ = std::process::Command::new("kill")
-        .arg(format!("-{}", signal))
-        .arg(pid.to_string())
-        .output();
-}
 
 pub fn launch(input: &str) {
     // Remove field codes from argv (including those that are deprecated), we won't be needing them...

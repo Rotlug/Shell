@@ -61,16 +61,6 @@
         }
     }
 
-    &.large {
-        .tab-icon {
-            font-size: 20px;
-        }
-
-        .tab-label {
-            @include large-text;
-        }
-    }
-
     .tab-icon {
         @include material-icons;
         margin-right: 8px;

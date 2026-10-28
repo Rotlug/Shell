@@ -18,9 +18,6 @@ use std::collections::HashMap;
 use gtk::prelude::*;
 use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell as _};
 
-use crate::APP_LOCAL;
-use crate::ipc;
-use crate::services::compositor;
 use crate::utils::gesture;
 use self::base::{BarModule, hide_all_expanded_modules};
 
@@ -215,25 +212,4 @@ impl BarWindow {
     }
 }
 
-pub fn toggle_module_by_name(name: &str) {
-    let Some(monitor) = compositor::get_active_monitor() else {
-        return;
-    };
 
-    APP_LOCAL.with(|app| {
-        for bar_window in &*app.bars.borrow() {
-            if bar_window.monitor == monitor && let Some(module) = bar_window.modules.borrow().get(name) {
-                module.set_expanded(!module.expanded());
-                bar_window.set_keyboard_mode();
-            }
-        }
-    });
-}
-
-pub fn listen_for_ipc_messages() {
-    ipc::listen_for_messages_local(|message| {
-        if let Some(module_name) = message.strip_prefix("toggle_bar_module_") {
-            toggle_module_by_name(module_name);
-        }
-    });
-}

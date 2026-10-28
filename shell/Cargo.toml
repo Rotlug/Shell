@@ -4,9 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-anyhow = "1.0.104"
 async-broadcast = "0.7.2"
-async-channel = "2.5.0"
 cairo-rs = "0.21.5"
 chrono = "0.4.45"
 network_manager = { path = "../libraries/network_manager" }
@@ -33,7 +31,6 @@ discord = { path = "../libraries/discord" }
 mpris = { path = "../libraries/mpris" }
 notif_daemon = { path = "../libraries/notif_daemon" }
 systray = { path = "../libraries/systray" }
-notify = "8.2.0"
 num-traits = "0.2.19"
 volume_mixer = { path = "../libraries/volume_mixer" }
 regex = "1.13.1"
